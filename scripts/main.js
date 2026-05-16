@@ -14297,27 +14297,6 @@
             if (sBtn) sBtn.disabled = (tot < 4);
         }
 
-        function confirmSubjectsAndStart() {
-            var subjects = [];
-            document.querySelectorAll('#subject-chip-list .subject-chip.locked').forEach(function (el) {
-                subjects.push(el.id.replace('chip-', ''));
-            });
-            document.querySelectorAll('#subject-chip-list .subject-chip.selected').forEach(function (el) {
-                subjects.push(el.id.replace('chip-', ''));
-            });
-            if (subjects.length < 4) { alert('Please select exactly 4 subjects.'); return; }
-            closeSubjectModal();
-            if (_postSupabase && window._authUser) {
-                _postSupabase.from('profiles')
-                    .update({ post_utme_subjects: subjects })
-                    .eq('id', window._authUser.id)
-                    .then(function () { }).catch(function () { });
-                if (window._authProfile) window._authProfile.post_utme_subjects = subjects;
-            }
-            alert('✅ Subjects selected: ' + subjects.join(', ') + '\n\nMode: ' + (_pendingExamMode || '').toUpperCase() + '\n\nPost-UTME exam engine loading in next phase!');
-        }
-
-
         // ══════════════════════════════════════════════════════════════════
         // PHASE 3 — Post-UTME Exam Engine
         // ══════════════════════════════════════════════════════════════════

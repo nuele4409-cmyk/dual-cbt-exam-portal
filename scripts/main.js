@@ -15311,14 +15311,21 @@
                     var res = await new Promise(function(resolve) {
                         var t = setTimeout(function(){ resolve({ data:[] }); }, 6000);
                         _postSupabase.from('question_bank')
-                            .select('id, subject, question, options, answer, explanation')
+                            .select('id, subject, question, option_a, option_b, option_c, option_d, correct_answer, explanation')
                             .in('subject', subjects)
-                            .or('university.eq.' + uni + ',university.is.null')
+                            .or('university.eq.' + uni + ',university.is.null,university.eq.ALL')
                             .limit(100)
                             .then(function(r){ clearTimeout(t); resolve(r); })
                             .catch(function(){ clearTimeout(t); resolve({ data:[] }); });
                     });
-                    allQs = res.data || [];
+                    allQs = (res.data || []).map(function(q) {
+                        return {
+                            id: q.id, subject: q.subject, question: q.question,
+                            options: [q.option_a, q.option_b, q.option_c, q.option_d],
+                            answer: ['A','B','C','D'].indexOf((q.correct_answer||'').toUpperCase()),
+                            explanation: q.explanation
+                        };
+                    });
                 } catch(e) {}
             }
             if (allQs.length < 5) {
@@ -16442,12 +16449,22 @@
                 var allQs = await new Promise(function(resolve) {
                     var t = setTimeout(function(){ resolve([]); }, 6000);
                     var q = _postSupabase.from('question_bank')
-                        .select('id,subject,question,options,answer,explanation')
+                        .select('id,subject,question,option_a,option_b,option_c,option_d,correct_answer,explanation')
                         .in('subject', subjects);
-                    if (uni) q = q.or('university.eq.' + uni + ',university.is.null');
-                    else     q = q.is('university', null);
+                    if (uni) q = q.or('university.eq.' + uni + ',university.is.null,university.eq.ALL');
+                    else     q = q.or('university.is.null,university.eq.ALL');
                     q.limit(100)
-                     .then(function(r){ clearTimeout(t); resolve(r.data||[]); })
+                     .then(function(r){
+                         clearTimeout(t);
+                         resolve((r.data||[]).map(function(q) {
+                             return {
+                                 id: q.id, subject: q.subject, question: q.question,
+                                 options: [q.option_a, q.option_b, q.option_c, q.option_d],
+                                 answer: ['A','B','C','D'].indexOf((q.correct_answer||'').toUpperCase()),
+                                 explanation: q.explanation
+                             };
+                         }));
+                     })
                      .catch(function(){ clearTimeout(t); resolve([]); });
                 });
                 if (allQs.length < 5) {

@@ -1383,7 +1383,8 @@
         <script src="scripts/main.js"></script>
         <script>
         // ← Portal button — direct DOM wiring, bypasses all onclick/scope issues
-        document.getElementById('utme-back-btn').addEventListener('click', function() {
+        var _backBtn = document.getElementById('utme-back-btn');
+        if (_backBtn) _backBtn.addEventListener('click', function() {
             var s = document.getElementById('utme-screen');
             var p = document.getElementById('portal-selector');
             if (s) s.style.display = 'none';

@@ -1,0 +1,21 @@
+subject,university,question,option_a,option_b,option_c,option_d,correct_answer,explanation
+mathematics,ALL,If α and β are roots of 3x² − 5x − 2 = 0. evaluate α²β + αβ².,10/9,−10/3,25/9,−10/9,D,α²β + αβ² = αβ(α + β) = (−2/3)(5/3) = −10/9
+mathematics,ALL,Solve: log₃(x + 4) + log₃(x − 2) = 3,x = 5,x = −7 or x = 5,x = 7,x = 3,A,"(x+4)(x−2)=27 → x²+2x−35=0 → x=5 or −7. x=−7 rejected (log of negative undefined)"
+mathematics,ALL,"When polynomial P(x) is divided by (x − 2) the remainder is 3; when divided by (x + 1) the remainder is −6. Find the remainder when P(x) is divided by (x − 2)(x + 1).",3x + 3,3x − 3,x − 3,3x − 9,B,"R(x)=ax+b. P(2)=3→2a+b=3; P(−1)=−6→−a+b=−6. Solving: a=3, b=−3. Remainder = 3x − 3"
+mathematics,ALL,If sin A = 3/5 where A is obtuse. find the exact value of cos 2A.,−7/25,−24/25,24/25,7/25,D,cos 2A = 1 − 2sin²A = 1 − 2(9/25) = 7/25. Option A comes from reversing the formula.
+mathematics,ALL,"Given y = x² ln x, find d²y/dx².",2 ln x + 2,2 ln x + 1,2 ln x + 3,2/x + 3,C,"dy/dx = 2x ln x + x. Differentiating: 2 ln x + 2x(1/x) + 1 = 2 ln x + 3"
+mathematics,ALL,"Evaluate ∫₀¹ xeˣ dx",e − 1,2e − 1,e,1,D,"IBP: u=x, dv=eˣdx → [xeˣ]₀¹ − ∫₀¹eˣdx = e − (e−1) = 1"
+mathematics,ALL,"Find the equation of the tangent to the circle x² + y² − 2x − 4y − 5 = 0 at the point (4, 3).",3x + y − 15 = 0,3x − y − 9 = 0,x − 3y + 5 = 0,3x + y + 15 = 0,A,"Centre=(1,2). Slope of radius to (4,3): 1/3. Tangent slope: −3. y−3=−3(x−4) → 3x+y=15"
+mathematics,ALL,"If A = [[2,1],[3,2]] and B = A⁻¹. find the element in row 1. column 2 of B².",4,7,−4,−2,C,"det(A)=1 so B=[[2,−1],[−3,2]]. B²=[[7,−4],[−12,7]]. Row 1. Col 2 = −4"
+mathematics,ALL,The 3rd and 7th terms of a GP are 20 and 320 respectively. Find the sum of the first 6 terms.,635,160,640,315,D,"ar²=20. ar⁶=320 → r⁴=16 → r=2. a=5. S₆=5(2⁶−1)/(2−1)=5×63=315"
+mathematics,ALL,"In how many ways can the letters of the word COMMITTEE be arranged such that the two M's are never adjacent?","10,080","45,360","20,160","35,280",D,"Total=9!/(2!2!2!)=45,360. MM together=8!/(2!2!)=10,080. Non-adjacent=45,360−10,080=35,280"
+mathematics,ALL,"A bag contains 5 red and 3 blue balls. Two balls are drawn without replacement. Given that the first ball is red. find the probability that exactly one ball in total is red.",4/7,15/56,5/14,3/7,D,"After one red drawn: 4 red and 3 blue remain. P(2nd blue | 1st red) = 3/7"
+mathematics,ALL,"The sum of the first n terms of a series is Sₙ = 3n² + 2n. Find the 10th term and identify the type of sequence.","T₁₀ = 320, Arithmetic","T₁₀ = 61, Arithmetic","T₁₀ = 59, Neither","T₁₀ = 59, Arithmetic",D,"Tₙ=Sₙ−Sₙ₋₁=6n−1. T₁₀=59. Common difference=6 (constant) → Arithmetic Progression"
+mathematics,ALL,"If f(x) = (2x + 1)/(x − 3). x ≠ 3. find f⁻¹(f⁻¹(0)).",−1/2,−1/5,5,1/5,D,"f⁻¹(x)=(3x+1)/(x−2). f⁻¹(0)=−1/2. f⁻¹(−1/2)=(−1/2)/(−5/2)=1/5"
+mathematics,ALL,"Express (3x² + x + 2)/(x³ − x) in partial fractions.","2/x + 3/(x−1) + 2/(x+1)","−2/x + 3/(x−1) − 2/(x+1)","2/x − 3/(x−1) + 2/(x+1)","−2/x + 3/(x−1) + 2/(x+1)",D,"x=0: A=−2; x=1: B=3; x=−1: C=2. Result: −2/x + 3/(x−1) + 2/(x+1)"
+mathematics,ALL,Find the range of values of x for which 2x² + 3x − 2 < 0.,x < −2 or x > 1/2,−1/2 < x < 2,−2 ≤ x ≤ 1/2,−2 < x < 1/2,D,"Roots: x=1/2 or x=−2. Parabola opens upward so negative BETWEEN roots: −2 < x < 1/2"
+mathematics,ALL,"Given vectors a = 2i − j + 3k and b = i + 2j − k. find the angle between them to the nearest degree.",71°,90°,120°,109°,D,"a·b=2−2−3=−3. |a|=√14. |b|=√6. cos θ=−3/√84≈−0.327 → θ≈109°"
+mathematics,ALL,"The mean of 8 numbers is 7. Six of the numbers are 5, 8, 4, 9, 6, and 10. The remaining two numbers are equal. Find the standard deviation of the complete data set.",7/4,√7/4,7/2,√14/2,D,"Remaining two = 7 each. Σd²=28. Variance=28/8=3.5. SD=√3.5=√14/2"
+mathematics,ALL,"Simplify: (3 + √5)/(3 − √5) − (3 − √5)/(3 + √5)",6√5,√5,7/2,3√5,D,"Numerator=(3+√5)²−(3−√5)²=6×2√5=12√5. Denominator=4. Result=12√5/4=3√5"
+mathematics,ALL,"In the expansion of (x + 2/x)⁸. find the term independent of x.","70","1,680","560","1,120",D,"Tᵣ₊₁=C(8,r)·2ʳ·x^{8−2r}. Set 8−2r=0 → r=4. T₅=C(8,4)·2⁴=70×16=1,120"
+mathematics,ALL,"A curve is defined parametrically by x = t + 1/t and y = t − 1/t. Find dy/dx when t = 2.",3/5,5/4,3/4,5/3,D,"dx/dt=1−1/t². dy/dt=1+1/t². dy/dx=(1+1/4)/(1−1/4)=(5/4)/(3/4)=5/3 at t=2"

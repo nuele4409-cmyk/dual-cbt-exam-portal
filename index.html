@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-RZ1TNLNXX2"></script>
+
+    <!-- =============================================
+         SUPABASE INTEGRATION — Inside OAU! CBT Portal
+         ─────────────────────────────────────────────
+         SETUP INSTRUCTIONS:
+         1. Go to https://supabase.com and create a free project
+         2. In Supabase SQL Editor, run the schema below
+         3. Go to Project Settings → API and copy your
+            Project URL and anon/public key into the config
+         ─────────────────────────────────────────────
+         SQL SCHEMA (run once in Supabase SQL Editor):
+         ─────────────────────────────────────────────
+         -- Profiles table
+         CREATE TABLE IF NOT EXISTS profiles (
+           student_id TEXT PRIMARY KEY,
+           full_name  TEXT NOT NULL
+         );
+
+         -- Exam history (one row per attempt — never overwritten)
+         -- Run this in Supabase SQL Editor if upgrading from old schema:
+         --   ALTER TABLE exams ADD COLUMN IF NOT EXISTS student_name TEXT;
+         --   ALTER TABLE exams ADD COLUMN IF NOT EXISTS raw_data JSONB;
+         CREATE TABLE IF NOT EXISTS exams (
+           id             UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+           student_id     TEXT NOT NULL,
+           student_name   TEXT,
+           exam_mode      TEXT,
+           aggregate_score INT,
+           raw_score      INT,
+           total_questions INT,
+           seal           TEXT,
+           raw_data       JSONB,
+           created_at     TIMESTAMPTZ DEFAULT now()
+         );
+
+         -- Live session persistence
+         CREATE TABLE IF NOT EXISTS sessions (
+           student_id      TEXT PRIMARY KEY,
+           current_subject TEXT,
+           current_index   INT,
+           answers         JSONB,
+           time_left       INT,
+           exam_data       JSONB,
+           student_details JSONB,
+           exam_mode       TEXT,
+           updated_at      TIMESTAMPTZ DEFAULT now()
+         );
+
+         -- Enable Row Level Security (allow all for now — tighten later)
+         ALTER TABLE profiles  ENABLE ROW LEVEL SECURITY;
+         ALTER TABLE exams     ENABLE ROW LEVEL SECURITY;
+         ALTER TABLE sessions  ENABLE ROW LEVEL SECURITY;
+
+         CREATE POLICY "allow_all_profiles"  ON profiles  FOR ALL USING (true) WITH CHECK (true);
+         CREATE POLICY "allow_all_exams"     ON exams     FOR ALL USING (true) WITH CHECK (true);
+         CREATE POLICY "allow_all_sessions"  ON sessions  FOR ALL USING (true) WITH CHECK (true);
+
+         -- Enable Realtime on exams table
+         ALTER PUBLICATION supabase_realtime ADD TABLE exams;
+         ─────────────────────────────────────────────
+    ============================================= -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ╔══════════════════════════════════════════════════════════════════╗
+         ║  POST-UTME AUTH — NEW Supabase Project (separate from UTME DB)  ║
+         ╠══════════════════════════════════════════════════════════════════╣
+         ║  SETUP STEPS:                                                    ║
+         ║  1. Create a brand-new Supabase project at https://supabase.com  ║
+         ║  2. In SQL Editor, paste & run ALL the SQL below                 ║
+         ║  3. Fill POST_SUPABASE_URL and POST_SUPABASE_ANON below          ║
+         ╠══════════════════════════════════════════════════════════════════╣
+         ║  SQL SCHEMA (run once in your NEW project's SQL Editor):         ║
+         ║                                                                  ║
+         ║  -- Student ID auto-increment sequence                           ║
+         ║  CREATE SEQUENCE IF NOT EXISTS student_id_seq START 1001;        ║
+         ║                                                                  ║
+         ║  -- Profiles table                                               ║
+         ║  CREATE TABLE public.profiles (                                  ║
+         ║    id                   UUID REFERENCES auth.users(id)           ║
+         ║                         ON DELETE CASCADE PRIMARY KEY,           ║
+         ║    student_id           TEXT UNIQUE NOT NULL,                    ║
+         ║    full_name            TEXT NOT NULL,                           ║
+         ║    email                TEXT UNIQUE NOT NULL,                    ║
+         ║    has_post_utme_access BOOLEAN DEFAULT false NOT NULL,          ║
+         ║    streak_count         INT DEFAULT 0,                           ║
+         ║    last_login           TIMESTAMPTZ,                             ║
+         ║    badges               JSONB DEFAULT '[]'::jsonb,               ║
+         ║    created_at           TIMESTAMPTZ DEFAULT now()                ║
+         ║  );                                                              ║
+         ║                                                                  ║
+         ║  -- Trigger: auto-create profile + IOAU-XXXX ID on sign-up      ║
+         ║  CREATE OR REPLACE FUNCTION public.handle_new_user()             ║
+         ║  RETURNS TRIGGER AS $$                                           ║
+         ║  BEGIN                                                           ║
+         ║    INSERT INTO public.profiles (id, email, student_id, full_name)║
+         ║    VALUES (                                                      ║
+         ║      NEW.id, NEW.email,                                          ║
+         ║      'IOAU-' || LPAD(NEXTVAL('student_id_seq')::TEXT, 4, '0'),  ║
+         ║      COALESCE(NEW.raw_user_meta_data->>'full_name','Student')    ║
+         ║    );                                                            ║
+         ║    RETURN NEW;                                                   ║
+         ║  END;                                                            ║
+         ║  $$ LANGUAGE plpgsql SECURITY DEFINER;                          ║
+         ║                                                                  ║
+         ║  CREATE OR REPLACE TRIGGER on_auth_user_created                  ║
+         ║    AFTER INSERT ON auth.users                                    ║
+         ║    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();       ║
+         ║                                                                  ║
+         ║  -- Activation codes table (paywall)                             ║
+         ║  CREATE TABLE public.activation_codes (                          ║
+         ║    id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,        ║
+         ║    code       TEXT UNIQUE NOT NULL,                              ║
+         ║    is_used    BOOLEAN DEFAULT false NOT NULL,                    ║
+         ║    used_by    UUID REFERENCES auth.users(id),                    ║
+         ║    used_at    TIMESTAMPTZ,                                       ║
+         ║    created_at TIMESTAMPTZ DEFAULT now()                          ║
+         ║  );                                                              ║
+         ║                                                                  ║
+         ║  -- Secure RPC: redeem_activation_code()                         ║
+         ║  CREATE OR REPLACE FUNCTION public.redeem_activation_code(       ║
+         ║    input_code TEXT                                               ║
+         ║  ) RETURNS TEXT AS $$                                            ║
+         ║  DECLARE v_code_id UUID;                                         ║
+         ║  BEGIN                                                           ║
+         ║    SELECT id INTO v_code_id FROM public.activation_codes         ║
+         ║      WHERE code = input_code AND is_used = false FOR UPDATE;     ║
+         ║    IF v_code_id IS NULL THEN RETURN 'INVALID'; END IF;           ║
+         ║    UPDATE public.activation_codes                                ║
+         ║      SET is_used=true, used_by=auth.uid(), used_at=now()         ║
+         ║      WHERE id = v_code_id;                                       ║
+         ║    UPDATE public.profiles SET has_post_utme_access=true          ║
+         ║      WHERE id = auth.uid();                                      ║
+         ║    RETURN 'OK';                                                  ║
+         ║  END;                                                            ║
+         ║  $$ LANGUAGE plpgsql SECURITY DEFINER;                          ║
+         ║                                                                  ║
+         ║  -- RLS                                                          ║
+         ║  ALTER TABLE public.profiles         ENABLE ROW LEVEL SECURITY; ║
+         ║  ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY; ║
+         ║  CREATE POLICY "own_profile_read"                                ║
+         ║    ON public.profiles FOR SELECT USING (auth.uid() = id);       ║
+         ║  CREATE POLICY "own_profile_update"                              ║
+         ║    ON public.profiles FOR UPDATE USING (auth.uid() = id);       ║
+         ║  CREATE POLICY "codes_auth_read"                                 ║
+         ║    ON public.activation_codes FOR SELECT                         ║
+         ║    USING (auth.role() = 'authenticated');                        ║
+         ╚══════════════════════════════════════════════════════════════════╝ -->
+
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inside OAU!𓃵 - Official UTME CBT</title>
+    <!-- Chart.js for Performance Analytics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <!-- html2canvas for WhatsApp Share Card -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="stylesheet" href="main.css">
+    <!-- Google Fonts — Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Anti-FOUC: apply saved theme before first paint -->
+</head>
+
+<body>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         THEME SWITCHER WIDGET — fixed bottom-right, persists across all screens
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="theme-switcher">
+        <div id="theme-options">
+            <button class="theme-opt-btn" data-t="dark-glass"  onclick="setTheme('dark-glass')">🌙 Dark Glass</button>
+            <button class="theme-opt-btn" data-t="saas"        onclick="setTheme('saas')">☀️ Clean SaaS</button>
+        </div>
+        <button id="theme-switcher-toggle" onclick="_toggleThemeMenu()" title="Change theme">🎨</button>
+    </div>
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         AUTH OVERLAY — shown on every page load until user is signed in
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="auth-overlay">
+        <div class="auth-box">
+            <div class="auth-logo">
+                <h1>Inside OAU!𓃵</h1>
+                <p>Official CBT & Post-UTME Portal</p>
+            </div>
+
+            <!-- Tab switcher -->
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tab-signin" onclick="switchAuthTab('signin')">Sign In</button>
+                <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Create Account</button>
+            </div>
+
+            <!-- ── SIGN IN FORM ── -->
+            <div id="auth-form-signin" class="auth-form active">
+                <div id="signin-error" class="auth-error"></div>
+                <div id="signin-success" class="auth-success"></div>
+                <input type="email" id="signin-email" class="auth-input" placeholder="Email address">
+                <input type="password" id="signin-password" class="auth-input" placeholder="Password">
+                <button class="auth-btn" id="signin-btn" onclick="doSignIn()">Sign In</button>
+                <p style="text-align:center;margin-top:1.4rem;font-size:0.85rem;color:#aaa;letter-spacing:0.01em;">
+                    Forgot password?
+                    <a href="#" onclick="doPasswordReset(); return false;" style="color:#0056b3;font-weight:600;">Reset here</a>
+                </p>
+            </div>
+
+            <!-- ── SIGN UP FORM ── -->
+            <div id="auth-form-signup" class="auth-form">
+                <div id="signup-error" class="auth-error"></div>
+                <div id="signup-success" class="auth-success"></div>
+                <input type="text" id="signup-name" class="auth-input"
+                    placeholder="Full Name (e.g. Oluwanifemi Akangbe)">
+                <input type="email" id="signup-email" class="auth-input" placeholder="Email address">
+                <input type="password" id="signup-password" class="auth-input"
+                    placeholder="Password (min. 6 characters)">
+                <input type="password" id="signup-confirm" class="auth-input" placeholder="Confirm password">
+                <button class="auth-btn" id="signup-btn" onclick="doSignUp()">Create Account</button>
+            </div>
+
+            <p style="text-align:center;font-size:0.78rem;color:#bbb;margin-top:1.4rem;">
+                Your data is protected. No spam. No OTP.
+            </p>
+        </div>
+    </div>
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PORTAL SELECTOR — shown after login, before any exam portal
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="portal-selector">
+        <div class="portal-header">
+            <div class="welcome-name" id="portal-welcome-name">Welcome back 👋</div>
+            <div class="student-id-badge" id="portal-student-id">Loading ID...</div>
+            <p>Choose your exam portal to continue</p>
+        </div>
+
+        <div class="portal-cards">
+            <!-- UTME Card -->
+            <div class="portal-card" onclick="enterUtmePortal()">
+                <div class="portal-icon">📚</div>
+                <span class="portal-badge">JAMB CBT</span>
+                <h3>UTME Portal</h3>
+                <p>Full JAMB mock exams, practice mode, performance analytics, and live leaderboard.</p>
+                <button class="portal-enter-btn">Enter Portal →</button>
+            </div>
+
+            <!-- Post-UTME Card -->
+            <div class="portal-card" onclick="enterPostUtmePortal()">
+                <div class="portal-icon">🎓</div>
+                <span class="portal-badge premium">PREMIUM</span>
+                <h3>Post-UTME Portal</h3>
+                <p>University-specific CBT, study hub, gamification, sprints & head-to-head duels.</p>
+                <button class="portal-enter-btn premium-btn">Enter Post-UTME →</button>
+            </div>
+        </div>
+
+        <div class="portal-signout">
+            <button onclick="doSignOut()">⎋ Sign Out</button>
+        </div>
+    </div>
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         POST-UTME SCREEN — Paywall + coming-soon placeholder
+         (Phase 2 build — full university CBT engine goes here)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="post-utme-screen">
+        <div class="container-inner">
+            <button class="back-to-portal" onclick="showPortalSelector()">← Back to Portal Selector</button>
+
+            <!-- Paywall gate (shown when has_post_utme_access = false) -->
+            <div id="paywall-gate" class="paywall-card" style="display:none;">
+                <div style="font-size:3rem;margin-bottom:0.8rem;">🔒</div>
+                <h2>Activate Post-UTME Access</h2>
+                <p>Enter your 10-character activation code to unlock university-specific CBT practice, the Study Hub,
+                    and live Sprint Challenges.</p>
+                <div id="activation-error" class="auth-error" style="display:none;max-width:380px;margin:0 auto 1rem;">
+                </div>
+                <div id="activation-success" class="auth-success"
+                    style="display:none;max-width:380px;margin:0 auto 1rem;"></div>
+                <div class="activation-input-row">
+                    <input type="text" id="activation-code-input" maxlength="10" placeholder="XXXXXXXXXXXX">
+                    <button onclick="redeemActivationCode()">Activate</button>
+                </div>
+                <p style="margin-top:1rem;font-size:0.8rem;color:#8d6e63;">
+                    Get your code from the <a href="https://whatsapp.com/channel/0029Vb6sNH4LSmbcGTeawU0q"
+                        target="_blank" style="color:#e65100;">Inside OAU! WhatsApp Channel</a>
+                </p>
+            </div>
+
+            <!-- Post-UTME home (shown when has_post_utme_access = true) -->
+            <div id="post-utme-home" style="display:none;">
+                <div class="putme-home">
+                    <div class="putme-welcome-bar">
+                        <div>
+                            <div class="name" id="putme-name">Welcome!</div>
+                            <div style="font-size:0.8rem;color:rgba(255,255,255,0.7);margin-top:2px;"
+                                id="putme-uni-display">No university selected yet</div>
+                        </div>
+                        <div class="sid" id="putme-sid">IOAU-—</div>
+                    </div>
+                    <div class="uni-card" id="uni-select-card">
+                        <h3>🏫 Select Your Target University</h3>
+                        <p>Choose the university you're preparing for. This filters your question bank and study
+                            materials.</p>
+                        <div style="margin-bottom:0.5rem;">
+                            <input type="text" id="uni-search-input"
+                                placeholder="🔍 Search by name or abbreviation (e.g. OAU, Lagos...)"
+                                oninput="_filterUniDropdown(this.value)"
+                                style="width:100%;padding:0.8rem 1rem;border:1.5px solid #dde3ea;border-radius:8px;font-size:0.9rem;box-sizing:border-box;margin-bottom:0.6rem;outline:none;transition:border-color 0.2s;font-family:inherit;">
+                            <select id="uni-dropdown" size="8"
+                                onchange="selectUniversity(this.value)"
+                                style="width:100%;border:1.5px solid #dde3ea;border-radius:8px;padding:0.4rem;font-size:0.88rem;cursor:pointer;outline:none;font-family:inherit;">
+                                <option value="">-- Select your university --</option>
+                            </select>
+                        </div>
+                        <button class="save-uni-btn" id="save-uni-btn" onclick="saveUniversity()" disabled>Save
+                            University</button>
+                        <div id="uni-save-msg"
+                            style="text-align:center;margin-top:0.6rem;font-size:0.85rem;color:#28a745;display:none;">✅
+                            University saved!</div>
+                    </div>
+                    <div id="putme-action-grid" style="display:none;">
+                        <!-- Gamification bar -->
+                        <div class="gami-bar" id="gami-bar" style="display:none;">
+                            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                                <div class="streak-pill"><span class="streak-fire">🔥</span><span
+                                        id="streak-num">0</span> day streak</div>
+                                <div class="badges-row" id="badges-row"></div>
+                            </div>
+                            <div class="rank-pill" id="rank-pill" style="display:none;">🏆 Rank #<span
+                                    id="rank-num">—</span></div>
+                        </div>
+                        <!-- Scheduled Mock Events Banner -->
+                        <div class="mock-events-section" id="mock-events-section" style="display:none;"></div>
+
+                        <div class="putme-actions" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));">
+                            <div class="putme-action-card" onclick="openSubjectModal('practice')">
+                                <div class="ac-icon">📝</div>
+                                <h4>Practice Mode</h4>
+                                <p>Untimed — practice at your own pace with instant feedback</p>
+                            </div>
+                            <div class="putme-action-card" onclick="openSubjectModal('mock')">
+                                <div class="ac-icon">🎯</div>
+                                <h4>Mock Exam</h4>
+                                <p>Timed 2-hour CBT exactly like the real Post-UTME</p>
+                            </div>
+                            <div class="putme-action-card" onclick="openStudyHub()">
+                                <div class="ac-icon">📚</div>
+                                <h4>Study Hub</h4>
+                                <p>Bite-sized notes + quick knowledge checks per subject</p>
+                            </div>
+                            <div class="putme-action-card" onclick="openMyHistory()">
+                                <div class="ac-icon">📊</div>
+                                <h4>My History</h4>
+                                <p>Review all past Post-UTME attempts and score trends</p>
+                            </div>
+                            <div class="putme-action-card" onclick="startSprintChallenge()"
+                                style="border:2px solid #c0392b;">
+                                <div class="ac-icon">🏃</div>
+                                <h4>Sprint Challenge</h4>
+                                <p>10 questions · 3 minutes · beat your best score</p>
+                            </div>
+                            <div class="putme-action-card" onclick="openLeaderboard()"
+                                style="border:2px solid #ffd700;">
+                                <div class="ac-icon">🏆</div>
+                                <h4>Leaderboard</h4>
+                                <p>See where you rank against other students</p>
+                            </div>
+                            <div class="putme-action-card" onclick="openDuelLobby()"
+                                style="border:2px solid #c0392b;">
+                                <div class="ac-icon">⚔️</div>
+                                <h4>Duel</h4>
+                                <p>Challenge a friend to a live 1v1 quiz battle</p>
+                            </div>
+                            <div class="putme-action-card" onclick="openAnalyticsHub()"
+                                style="border:2px solid #7c3aed;">
+                                <div class="ac-icon">📈</div>
+                                <h4>Analytics</h4>
+                                <p>Your stats — total exams, avg score, best score &amp; trends</p>
+                            </div>
+                        </div>
+                        <div style="text-align:center;margin-top:0.5rem;">
+                            <button onclick="selectUniversity(null)"
+                                style="background:none;border:none;color:#0056b3;font-size:0.85rem;cursor:pointer;text-decoration:underline;">Change
+                                University</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4-Subject Selection Modal -->
+            <div id="subject-modal">
+                <div class="subject-modal-box">
+                    <div class="subject-modal-header">
+                        <h3 id="subject-modal-title">📋 Select Your 4 Subjects</h3>
+                        <button onclick="closeSubjectModal()">×</button>
+                    </div>
+                    <div class="subject-modal-body">
+                        <p>Choose exactly <strong>4 subjects</strong>. Use of English is compulsory for all
+                            universities.</p>
+                        <div class="subject-list" id="subject-chip-list"></div>
+                    </div>
+                    <div class="subject-modal-footer">
+                        <div class="subject-count">Selected: <span id="subject-count-num">1</span>/4</div>
+                        <button class="start-exam-btn" id="start-exam-btn" onclick="confirmSubjectsAndStart()"
+                            disabled>Start Exam →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post-UTME Exam Interface -->
+            <div id="putme-exam-wrap">
+                <div class="putme-home" style="max-width:900px;">
+                    <button class="hub-back-btn" id="exam-back-btn" onclick="backToPutmeHome()" style="margin-bottom:0.8rem;">← Back to Portal</button>
+                    <div class="putme-cbt-header">
+                        <div>
+                            <span id="putme-cbt-candidate" style="color:#0056b3;"></span>
+                            &nbsp;·&nbsp;
+                            <span id="putme-cbt-uni" style="font-size:0.85rem;color:#555;"></span>
+                        </div>
+                        <div id="putme-live-count"
+                            style="font-size:0.78rem;color:#28a745;background:#e8f5e9;padding:3px 10px;border-radius:20px;border:1px solid #a5d6a7;">
+                            🟢 Ready
+                        </div>
+                        <div id="putme-timer-display" class="putme-timer" style="display:none;">02:00:00</div>
+                        <div id="putme-practice-badge"
+                            style="display:none;background:#e8f5e9;color:#2e7d32;padding:4px 12px;border-radius:20px;font-size:0.82rem;font-weight:700;border:1px solid #a5d6a7;">
+                            📝 Practice — No Time Limit
+                        </div>
+                    </div>
+                    <div class="putme-tabs" id="putme-subject-tabs"></div>
+                    <div class="putme-layout">
+                        <div>
+                            <div id="putme-passage-box" class="putme-passage" style="display:none;"></div>
+                            <div class="putme-question-text" id="putme-question-text">Loading question...</div>
+                            <div class="putme-options" id="putme-options-container"></div>
+                            <div id="putme-practice-feedback"
+                                style="display:none;margin-bottom:0.8rem;padding:0.7rem 1rem;border-radius:8px;font-size:0.9rem;font-weight:600;">
+                            </div>
+                            <div class="putme-controls">
+                                <button class="putme-btn-prev" onclick="putmeNav(-1)">◀ Prev</button>
+                                <button class="putme-btn-submit" onclick="confirmPutmeSubmit()">Submit Exam</button>
+                                <button class="putme-btn-next" onclick="putmeNav(1)">Next ▶</button>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="putme-grid-panel">
+                                <div class="putme-grid-title">Question Navigator</div>
+                                <div class="putme-num-grid" id="putme-num-grid"></div>
+                            </div>
+                            <div
+                                style="margin-top:0.8rem;background:#fff;border-radius:8px;padding:0.8rem;font-size:0.82rem;color:#555;border:1px solid #e0e0e0;">
+                                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                                    <div style="width:14px;height:14px;border-radius:3px;background:#0056b3;"></div>
+                                    Answered
+                                </div>
+                                <div style="display:flex;align-items:center;gap:6px;">
+                                    <div
+                                        style="width:14px;height:14px;border-radius:3px;background:#e0e0e0;border:1px solid #ccc;">
+                                    </div> Not answered
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post-UTME Results Screen -->
+            <div id="putme-result-wrap">
+                <div class="putme-home">
+                    <div class="putme-score-card">
+                        <div style="font-size:0.9rem;color:rgba(255,255,255,0.75);margin-bottom:0.5rem;"
+                            id="putme-result-meta">OAU · Mock Exam</div>
+                        <div class="big-score" id="putme-big-score">0</div>
+                        <div class="score-label" id="putme-score-label">out of 0 questions</div>
+                        <div style="margin-top:1rem;font-size:0.85rem;color:rgba(255,255,255,0.8);"
+                            id="putme-time-taken"></div>
+                    </div>
+                    <div class="putme-subject-scores" id="putme-subject-scores"></div>
+                    <div class="putme-result-btns">
+                        <button class="btn-corrections" onclick="openPutmeCorrections()">📝 View Corrections</button>
+                        <button class="btn-back-home" onclick="backToPutmeHome()">🏠 Back to Portal</button>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- ══ STUDY HUB ════════════════════════════════════════════════ -->
+            <div id="study-hub-wrap">
+                <div class="putme-home">
+
+                    <!-- Subject selection -->
+                    <div id="hub-subject-screen">
+                        <button class="hub-back-btn" onclick="backToPutmeHome()">← Back to Portal</button>
+                        <div class="hub-header">
+                            <h2>📚 Study Hub</h2>
+                            <p>Select a subject to read bite-sized notes and test your knowledge</p>
+                        </div>
+                        <div class="hub-subject-grid" id="hub-subject-grid">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Notes list -->
+                    <div id="hub-notes-screen">
+                        <button class="hub-back-btn" onclick="showHubSubjectScreen()">← Back to Subjects</button>
+                        <div class="hub-header">
+                            <h2 id="hub-notes-title">📖 Notes</h2>
+                            <p id="hub-notes-subtitle">Select a topic to start reading</p>
+                        </div>
+                        <div class="hub-notes-list" id="hub-notes-list">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Note viewer -->
+                    <div id="hub-note-viewer">
+                        <button class="hub-back-btn" onclick="showHubNotesList()">← Back to Notes</button>
+                        <div class="hub-header">
+                            <h2 id="hub-viewer-title">📄 Note</h2>
+                            <p id="hub-viewer-sub"></p>
+                        </div>
+                        <div class="note-content-box" id="hub-note-content">Loading...</div>
+                        <button class="test-knowledge-btn" onclick="startKnowledgeQuiz()">
+                            🧠 Test My Knowledge (5–10 Questions)
+                        </button>
+                    </div>
+
+                    <!-- Quick quiz -->
+                    <div id="hub-quiz-wrap">
+                        <button class="hub-back-btn" onclick="backToNoteViewer()">← Back to Note</button>
+                        <div class="hub-quiz-header">
+                            <div class="quiz-title" id="hub-quiz-title">Quick Quiz</div>
+                            <div class="hub-quiz-progress" id="hub-quiz-progress">1 / 5</div>
+                        </div>
+                        <div class="hub-quiz-q" id="hub-quiz-question">Loading...</div>
+                        <div class="hub-quiz-opts" id="hub-quiz-opts"></div>
+                        <div class="hub-quiz-feedback" id="hub-quiz-feedback"></div>
+                        <div class="hub-quiz-controls">
+                            <button class="hqc-next" id="hqb-next" onclick="hubQuizNext()" style="display:none;">Next
+                                →</button>
+                            <button class="hqc-finish" id="hqb-finish" onclick="hubQuizFinish()"
+                                style="display:none;">See Results ✓</button>
+                        </div>
+                        <div class="hub-quiz-done" id="hub-quiz-done" style="display:none;">
+                            <div class="done-score" id="hub-done-score">0/0</div>
+                            <p id="hub-done-msg">Well done!</p>
+                            <div style="display:flex;gap:0.8rem;flex-wrap:wrap;">
+                                <button onclick="retryKnowledgeQuiz()"
+                                    style="flex:1;padding:0.8rem;background:#0056b3;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Retry
+                                    Quiz</button>
+                                <button onclick="backToNoteViewer()"
+                                    style="flex:1;padding:0.8rem;background:#6c757d;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Back
+                                    to Note</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            <!-- ══════════════════════════════════════════════════════════════ -->
+
+            <!-- Corrections Modal -->
+            <div id="putme-corrections-modal">
+                <div class="corrections-box">
+                    <div class="corrections-header">
+                        <h3 id="putme-corrections-title">📝 Corrections</h3>
+                        <button
+                            onclick="document.getElementById('putme-corrections-modal').classList.remove('open')">×</button>
+                    </div>
+                    <div class="corrections-body" id="putme-corrections-body"></div>
+                </div>
+            </div>
+
+            <!-- ══ LEADERBOARD SCREEN ══════════════════════════════════════ -->
+            <div id="leaderboard-screen">
+                <div class="lb-header">
+                    <h2>🏆 Leaderboard</h2>
+                    <button class="lb-back-btn" onclick="closeLeaderboard()">← Back</button>
+                </div>
+                <div class="lb-body">
+                    <div class="lb-tabs" id="lb-tabs">
+                        <button class="lb-tab active" onclick="loadLeaderboard('all',this)">🎯 General Practice</button>
+                        <button class="lb-tab" onclick="loadLeaderboard('uni',this)">🏫 My University</button>
+                        <button class="lb-tab" onclick="loadLeaderboard('weekly_mock',this)">📅 Weekly Mocks</button>
+                    </div>
+                    <div id="lb-list">
+                        <div class="lb-empty">Loading leaderboard…</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ SPRINT CHALLENGE SCREEN ══════════════════════════════════ -->
+            <div id="sprint-screen">
+                <div class="sprint-header">
+                    <h2>🏃 Sprint Challenge</h2>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="sprint-timer-big" id="sprint-timer">3:00</div>
+                        <button class="lb-back-btn" onclick="exitSprint()">✕ Exit</button>
+                    </div>
+                </div>
+                <div class="sprint-body">
+                    <!-- Intro card -->
+                    <div id="sprint-intro" class="sprint-result-card">
+                        <div style="font-size:3rem;">🏃</div>
+                        <h2 style="color:#1a2742;margin:10px 0 6px;">Sprint Challenge</h2>
+                        <p style="color:#555;margin-bottom:6px;">10 questions · 3-minute countdown · instant feedback
+                        </p>
+                        <p style="color:#888;font-size:0.85rem;margin-bottom:20px;">Questions pulled from your 4
+                            selected subjects.</p>
+                        <div id="sprint-best-display"
+                            style="margin-bottom:16px;font-size:0.9rem;color:#0056b3;font-weight:700;"></div>
+                        <button onclick="launchSprint()" class="sprint-next-btn"
+                            style="max-width:280px;margin:0 auto;display:block;">
+                            Start Sprint →
+                        </button>
+                    </div>
+                    <!-- Quiz area -->
+                    <div id="sprint-quiz-area" style="display:none;">
+                        <div class="sprint-progress">
+                            <span id="sprint-q-num">1 / 10</span>
+                            <div class="sprint-prog-bar">
+                                <div class="sprint-prog-fill" id="sprint-prog-fill" style="width:10%;"></div>
+                            </div>
+                        </div>
+                        <div class="sprint-q-card">
+                            <div class="sprint-q-text" id="sprint-q-text">Loading…</div>
+                            <div id="sprint-opts"></div>
+                            <button class="sprint-next-btn" id="sprint-next-btn" style="display:none;"
+                                onclick="sprintNext()">Next →</button>
+                        </div>
+                    </div>
+                    <!-- Result card -->
+                    <div id="sprint-result" style="display:none;" class="sprint-result-card">
+                        <div class="sprint-big-score" id="sprint-result-score">0/10</div>
+                        <div class="sprint-grade" id="sprint-result-grade"></div>
+                        <div id="sprint-result-best"
+                            style="font-size:0.85rem;color:#0056b3;font-weight:700;margin-bottom:20px;"></div>
+                        <button onclick="launchSprint()" class="sprint-next-btn"
+                            style="max-width:220px;margin:0 auto 10px;display:block;">
+                            🔁 Try Again
+                        </button>
+                        <br>
+                        <button onclick="exitSprint()"
+                            style="background:none;border:none;color:#0056b3;cursor:pointer;font-size:0.9rem;text-decoration:underline;">
+                            Back to Home
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- ══ ADMIN PANEL ══════════════════════════════════════════════ -->
+            <div id="admin-panel">
+                <div class="admin-header">
+                    <div>
+                        <h2 style="margin:0 0 2px;">⚙️ Admin Dashboard</h2>
+                        <div style="font-size:0.75rem;opacity:0.7;">Inside OAU! Post-UTME Management</div>
+                    </div>
+                    <button class="lb-back-btn"
+                        onclick="document.getElementById('admin-panel').classList.remove('active')">← Back</button>
+                </div>
+
+                <!-- Tabs -->
+                <div class="admin-tabs">
+                    <button class="admin-tab active" onclick="adminSwitchTab('mocks',this)">📅 Mock Events</button>
+                    <button class="admin-tab" onclick="adminSwitchTab('questions',this)">📝 Question Bank</button>
+                    <button class="admin-tab" onclick="adminSwitchTab('codes',this)">🔑 Access Codes</button>
+                    <button class="admin-tab" onclick="adminSwitchTab('notes',this)">📚 Study Notes</button>
+                    <button class="admin-tab" onclick="adminSwitchTab('revenue',this)">📊 Revenue</button>
+                </div>
+
+                <div class="admin-body">
+
+                    <!-- ── TAB: Mock Events ────────────────────────── -->
+                    <div class="admin-tab-pane active" id="adm-tab-mocks">
+                        <div class="admin-section">
+                            <h3>➕ Schedule New Mock</h3>
+                            <div class="admin-form-grid">
+                                <div class="admin-field full">
+                                    <label>Event Title</label>
+                                    <input type="text" id="adm-title" placeholder="e.g. OAU Weekly Mock #1">
+                                </div>
+                                <div class="admin-field">
+                                    <label>Date &amp; Time</label>
+                                    <input type="datetime-local" id="adm-datetime">
+                                </div>
+                                <div class="admin-field">
+                                    <label>Duration (minutes)</label>
+                                    <input type="number" id="adm-duration" value="60" min="10" max="180">
+                                </div>
+                                <div class="admin-field">
+                                    <label>University Filter</label>
+                                    <select id="adm-uni">
+                                        <option value="">All Universities</option>
+                                        <option value="OAU">OAU</option>
+                                        <option value="UNILAG">UNILAG</option>
+                                        <option value="UI">UI</option>
+                                        <option value="UNILORIN">UNILORIN</option>
+                                    </select>
+                                </div>
+                                <div class="admin-field">
+                                    <label>Description (optional)</label>
+                                    <input type="text" id="adm-desc" placeholder="e.g. Compete with 500+ students">
+                                </div>
+                            </div>
+                            <button class="admin-create-btn" onclick="adminCreateMock()">📅 Schedule This Mock</button>
+                            <div id="adm-msg" style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;">
+                            </div>
+                        </div>
+                        <div class="admin-section">
+                            <h3>📋 All Scheduled Mocks</h3>
+                            <div id="adm-mocks-list">
+                                <p style="color:#888;text-align:center;">Loading…</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── TAB: Question Bank ─────────────────────── -->
+                    <div class="admin-tab-pane" id="adm-tab-questions">
+                        <div class="admin-section">
+                            <h3>📤 Bulk Upload via CSV</h3>
+                            <p style="color:#555;font-size:0.85rem;margin-bottom:12px;">
+                                CSV format (one question per row):<br>
+                                <code
+                                    style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:0.8rem;">subject, university, question, option_a, option_b, option_c, option_d, correct_answer, explanation</code><br>
+                                <span style="font-size:0.78rem;color:#888;">correct_answer = A, B, C, or D &nbsp;|&nbsp;
+                                    university code from the dropdown above (leave blank for all) (or leave blank for all)</span>
+                            </p>
+                            <div class="admin-field">
+                                <label>Upload CSV File</label>
+                                <input type="file" id="adm-csv-file" accept=".csv" onchange="adminPreviewCSV(this)">
+                            </div>
+                            <p style="color:#888;font-size:0.82rem;margin:8px 0;">— or paste CSV text directly —</p>
+                            <div class="admin-field">
+                                <label>Paste CSV</label>
+                                <textarea id="adm-csv-text" rows="5"
+                                    placeholder="subject,university,question,option_a,option_b,option_c,option_d,correct_answer,explanation&#10;english,OAU,What is...,...,...,...,...,A,Explanation here"></textarea>
+                            </div>
+                            <button class="admin-create-btn" style="background:#16a34a;" onclick="adminParseCSV()">👁
+                                Preview Questions</button>
+                        </div>
+                        <div class="admin-section" id="adm-csv-preview-section" style="display:none;">
+                            <h3>Preview (<span id="adm-csv-count">0</span> questions)</h3>
+                            <div class="csv-preview" id="adm-csv-preview"></div>
+                            <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+                                <button class="admin-create-btn" style="background:#0056b3;"
+                                    onclick="adminUploadQuestions()">⬆️ Upload to Question Bank</button>
+                                <button class="admin-create-btn"
+                                    style="background:#6c757d;flex:0 0 auto;width:auto;padding:12px 20px;"
+                                    onclick="document.getElementById('adm-csv-preview-section').style.display='none'">Cancel</button>
+                            </div>
+                            <div id="adm-upload-msg"
+                                style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- ── TAB: Access Codes ──────────────────────── -->
+                    <div class="admin-tab-pane" id="adm-tab-codes">
+                        <div class="admin-section">
+                            <h3>🔑 Generate Activation Codes</h3>
+                            <div class="admin-form-grid">
+                                <div class="admin-field">
+                                    <label>How many codes?</label>
+                                    <input type="number" id="adm-code-qty" value="10" min="1" max="500">
+                                </div>
+                                <div class="admin-field">
+                                    <label>Code length</label>
+                                    <select id="adm-code-len">
+                                        <option value="8">8 characters</option>
+                                        <option value="10" selected>10 characters</option>
+                                        <option value="12">12 characters</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button class="admin-create-btn" onclick="adminGenerateCodes()">⚡ Generate Codes</button>
+                            <div id="adm-codes-msg"
+                                style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>
+                        </div>
+                        <div class="admin-section" id="adm-codes-result" style="display:none;">
+                            <div
+                                style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                                <h3 style="margin:0;">Generated Codes (<span id="adm-codes-count">0</span>)</h3>
+                                <button onclick="adminCopyCodes()"
+                                    style="background:#312e81;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.82rem;">📋
+                                    Copy All</button>
+                            </div>
+                            <div class="code-grid" id="adm-codes-grid"></div>
+                        </div>
+                        <div class="admin-section">
+                            <h3>📋 Unused Codes (latest 50)</h3>
+                            <button class="admin-create-btn" style="background:#374151;margin-bottom:12px;"
+                                onclick="adminLoadUnusedCodes()">🔄 Refresh List</button>
+                            <div id="adm-unused-codes">
+                                <p style="color:#888;text-align:center;font-size:0.85rem;">Click refresh to load.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── TAB: Study Notes ───────────────────────── -->
+                    <div class="admin-tab-pane" id="adm-tab-notes">
+                        <div class="admin-section">
+                            <h3>✏️ Add Study Note</h3>
+                            <div class="admin-form-grid">
+                                <div class="admin-field">
+                                    <label>Subject</label>
+                                    <select id="adm-note-subject">
+                                        <option value="english">English</option>
+                                        <option value="mathematics">Mathematics</option>
+                                        <option value="biology">Biology</option>
+                                        <option value="physics">Physics</option>
+                                        <option value="chemistry">Chemistry</option>
+                                        <option value="economics">Economics</option>
+                                        <option value="government">Government</option>
+                                        <option value="literature">Literature</option>
+                                        <option value="geography">Geography</option>
+                                    </select>
+                                </div>
+                                <div class="admin-field">
+                                    <label>University (blank = all)</label>
+                                    <select id="adm-note-uni">
+                                        <option value="">All Universities</option>
+                                        <option value="OAU">OAU</option>
+                                        <option value="UNILAG">UNILAG</option>
+                                        <option value="UI">UI</option>
+                                        <option value="UNILORIN">UNILORIN</option>
+                                    </select>
+                                </div>
+                                <div class="admin-field full">
+                                    <label>Note Title</label>
+                                    <input type="text" id="adm-note-title"
+                                        placeholder="e.g. Cell Division: Mitosis vs Meiosis">
+                                </div>
+                                <div class="admin-field full">
+                                    <label>Content (HTML supported: &lt;h3&gt;, &lt;p&gt;, &lt;strong&gt;, &lt;ul&gt;,
+                                        &lt;table&gt;)</label>
+                                    <div class="note-editor-toolbar">
+                                        <button onclick="admNoteInsert('&lt;h3&gt;','&lt;/h3&gt;')">H3</button>
+                                        <button onclick="admNoteInsert('&lt;p&gt;','&lt;/p&gt;')">P</button>
+                                        <button
+                                            onclick="admNoteInsert('&lt;strong&gt;','&lt;/strong&gt;')"><b>B</b></button>
+                                        <button onclick="admNoteInsert('&lt;em&gt;','&lt;/em&gt;')"><i>I</i></button>
+                                        <button
+                                            onclick="admNoteInsert('&lt;ul&gt;\n&lt;li&gt;','&lt;/li&gt;\n&lt;/ul&gt;')">List</button>
+                                        <button
+                                            onclick="admNoteInsert('&lt;table style=\'width:100%;border-collapse:collapse\'&gt;\n&lt;tr&gt;&lt;th style=\'padding:6px;border:1px solid #ccc\'&gt;','&lt;/th&gt;&lt;/tr&gt;\n&lt;/table&gt;')">Table</button>
+                                    </div>
+                                    <textarea id="note-editor-area"
+                                        placeholder="Write your note content here using HTML tags..."></textarea>
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                                <button class="admin-create-btn" style="background:#16a34a;"
+                                    onclick="admNotePreview()">👁 Preview</button>
+                                <button class="admin-create-btn" onclick="admNoteSave()">💾 Save Note</button>
+                            </div>
+                            <div id="adm-note-msg"
+                                style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>
+                        </div>
+                        <div class="admin-section" id="adm-note-preview-box" style="display:none;">
+                            <h3>Preview</h3>
+                            <div id="adm-note-preview-content" class="note-content-box"
+                                style="max-height:300px;overflow-y:auto;"></div>
+                        </div>
+                        <div class="admin-section">
+                            <h3>📋 Existing Notes</h3>
+                            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                                <select id="adm-notes-filter-sub"
+                                    style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;"
+                                    onchange="adminLoadNotes()">
+                                    <option value="">All Subjects</option>
+                                    <option value="english">English</option>
+                                    <option value="mathematics">Mathematics</option>
+                                    <option value="biology">Biology</option>
+                                    <option value="physics">Physics</option>
+                                    <option value="chemistry">Chemistry</option>
+                                </select>
+                                <button onclick="adminLoadNotes()"
+                                    style="background:#374151;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.82rem;">🔄
+                                    Refresh</button>
+                            </div>
+                            <div id="adm-notes-list">
+                                <p style="color:#888;text-align:center;font-size:0.85rem;">Click Refresh to load notes.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── TAB: Revenue ───────────────────────────── -->
+                    <div class="admin-tab-pane" id="adm-tab-revenue">
+                        <div class="admin-section">
+                            <h3>📊 Platform Overview</h3>
+                            <button class="admin-create-btn" style="background:#374151;margin-bottom:14px;"
+                                onclick="adminLoadRevenue()">🔄 Refresh Stats</button>
+                            <div class="stat-grid" id="adm-stat-grid">
+                                <div class="stat-card">
+                                    <div class="stat-num" id="stat-students">—</div>
+                                    <div class="stat-label">Total Students</div>
+                                </div>
+                                <div class="stat-card" style="border-top-color:#16a34a;">
+                                    <div class="stat-num" id="stat-paid" style="color:#16a34a;">—</div>
+                                    <div class="stat-label">Premium Access</div>
+                                </div>
+                                <div class="stat-card" style="border-top-color:#b91c1c;">
+                                    <div class="stat-num" id="stat-codes-total" style="color:#b91c1c;">—</div>
+                                    <div class="stat-label">Total Codes</div>
+                                </div>
+                                <div class="stat-card" style="border-top-color:#d97706;">
+                                    <div class="stat-num" id="stat-codes-used" style="color:#d97706;">—</div>
+                                    <div class="stat-label">Codes Redeemed</div>
+                                </div>
+                                <div class="stat-card" style="border-top-color:#0056b3;">
+                                    <div class="stat-num" id="stat-exams">—</div>
+                                    <div class="stat-label">Exams Taken</div>
+                                </div>
+                                <div class="stat-card" style="border-top-color:#7c3aed;">
+                                    <div class="stat-num" id="stat-questions">—</div>
+                                    <div class="stat-label">Questions in Bank</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="admin-section">
+                            <h3>🕐 Recent Signups (last 10)</h3>
+                            <div id="adm-recent-signups">
+                                <p style="color:#888;text-align:center;font-size:0.85rem;">Click Refresh Stats above.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- /admin-body -->
+            </div>
+
+            <!-- Admin FAB -->
+            <button id="admin-fab" onclick="openAdminPanel()" title="Admin Panel">⚙️</button>
+
+            <!-- ══ MOCK EVENT LEADERBOARD ════════════════════════════════════ -->
+            <div id="mock-lb-overlay">
+                <div class="lb-header" style="background:linear-gradient(135deg,#1e1b4b,#312e81);">
+                    <h2>🏆 Mock Event Results</h2>
+                    <button class="lb-back-btn"
+                        onclick="document.getElementById('mock-lb-overlay').classList.remove('active')">← Back</button>
+                </div>
+                <div class="lb-body">
+                    <div id="mock-lb-event-title"
+                        style="font-size:0.9rem;color:#555;margin-bottom:12px;text-align:center;"></div>
+                    <div id="mock-lb-list">
+                        <div class="lb-empty">Loading…</div>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /container-inner -->
+    </div>
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+
+    <div id="utme-screen" style="display:none;">
+        <div class="container">
+
+        <!-- ── UTME Hero Bar ─────────────────────────────────────────── -->
+        <div id="utme-hero-bar">
+            <button class="back-to-portal" onclick="showPortalSelector()" style="position:absolute;top:1rem;left:1rem;color:rgba(255,255,255,0.85);text-decoration:none;font-size:0.82rem;background:none;border:none;cursor:pointer;">← Portal</button>
+            <div class="utme-hero-name" id="utme-hero-name">Inside OAU!𓃵 UTME</div>
+            <div class="utme-hero-sub">JAMB CBT Practice &amp; Mock Exams</div>
+            <div class="utme-hero-id" id="utme-hero-id">Loading ID…</div>
+            <div><span class="utme-hero-prize">🏆 Authorized CBT Testing Portal</span></div>
+        </div>
+
+        <!-- ══ HOME VIEW (Action cards + channel strip) ═══════════════ -->
+        <div id="utme-home-view">
+
+            <!-- Action Cards -->
+            <div id="utme-quickactions-card">
+                <div class="utme-actions-grid">
+                    <div class="utme-action-card" onclick="openUtmeMockMode()">
+                        <div class="uac-icon">🎯</div>
+                        <h4>Mock Exam</h4>
+                        <p>Timed CBT exactly like the real JAMB exam</p>
+                    </div>
+                    <div class="utme-action-card" onclick="openUtmePracticeMode()">
+                        <div class="uac-icon">📝</div>
+                        <h4>Practice Mode</h4>
+                        <p>Custom time &amp; question limits, instant feedback</p>
+                    </div>
+                    <div class="utme-action-card" onclick="openUtmeStudyHub()">
+                        <div class="uac-icon">📚</div>
+                        <h4>Study Hub</h4>
+                        <p>Bite-sized notes per subject &amp; topic</p>
+                    </div>
+                    <div class="utme-action-card" onclick="openUtmeAnalytics()">
+                        <div class="uac-icon">📈</div>
+                        <h4>My Analytics</h4>
+                        <p>Score trends, avg &amp; best across all exams</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Channel Strip (blended) -->
+            <div id="utme-channel-strip">
+                <div class="cs-left">
+                    <span>📣</span>
+                    Get today's Access Code on the official channel
+                </div>
+                <div class="cs-actions">
+                    <a href="https://whatsapp.com/channel/0029Vb6sNH4LSmbcGTeawU0q" target="_blank" class="cs-btn cs-btn-wa">Join Channel</a>
+                    <button class="cs-btn cs-btn-lb" onclick="document.getElementById('leaderboard-modal').style.display='block'">🏆 Leaderboard</button>
+                </div>
+            </div>
+
+        </div><!-- /#utme-home-view -->
+
+        <!-- ══ LEADERBOARD MODAL ══════════════════════════════════════ -->
+        <div id="leaderboard-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:100002;overflow-y:auto;backdrop-filter:blur(4px);">
+            <div style="max-width:520px;margin:40px auto;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+                <div class="lb-modal-header">
+                    <h3 style="margin:0;font-size:1rem;">🏆 Top 50 Leaderboard</h3>
+                    <button onclick="document.getElementById('leaderboard-modal').style.display='none'"
+                        style="background:rgba(255,255,255,0.18);border:none;color:#fff;font-size:1.2rem;cursor:pointer;border-radius:50%;width:30px;height:30px;line-height:1;display:flex;align-items:center;justify-content:center;">×</button>
+                </div>
+                <div class="lb-modal-body" id="leaderboard-list">
+                    <p style="text-align:center;color:var(--th-text-2);padding:30px;">Loading leaderboard…</p>
+                </div>
+                <div class="lb-modal-footer">Updates live · Ranked by JAMB Aggregate</div>
+            </div>
+        </div>
+
+        <!-- ══ MODE PANEL (shown when Mock or Practice card is clicked) ═ -->
+        <div id="utme-mode-panel">
+            <div class="card">
+                <div class="utme-mode-header">
+                    <button onclick="closeUtmeModePanel()">← Back</button>
+                    <div class="utme-mode-title" id="utme-mode-title">Start Exam</div>
+                    <span class="utme-mode-badge" id="utme-mode-badge">Mock</span>
+                </div>
+
+                <!-- Hidden select keeps existing JS working -->
+                <select id="exam-mode" style="display:none;" onchange="updatePracticeInputs()">
+                    <option value="mock">Mock</option>
+                    <option value="practice">Practice</option>
+                </select>
+
+                <div class="form-group">
+                    <label class="main-label">Your Details</label>
+                    <input type="text" id="cand-name" class="form-control" placeholder="Full Name">
+                    <input type="tel" id="cand-whatsapp" class="form-control" placeholder="WhatsApp Number (optional)">
+                    <div style="margin-bottom:1rem;">
+                        <label class="utme-id-label">Student ID</label>
+                        <input type="text" id="cand-reg" readonly>
+                        <small class="utme-id-hint">🔒 Unified across both portals</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="main-label">Select Subjects <span style="font-weight:400;font-size:0.8rem;color:var(--th-text-2);">(English + 3 Electives)</span></label>
+                    <div class="utme-subject-grid">
+                        <div class="utme-subject-chip utme-locked utme-selected" data-value="english">Use of English</div>
+                        <div class="utme-subject-chip" data-value="mathematics" onclick="utmeToggleSubject(this)">Mathematics</div>
+                        <div class="utme-subject-chip" data-value="physics" onclick="utmeToggleSubject(this)">Physics</div>
+                        <div class="utme-subject-chip" data-value="chemistry" onclick="utmeToggleSubject(this)">Chemistry</div>
+                        <div class="utme-subject-chip" data-value="biology" onclick="utmeToggleSubject(this)">Biology</div>
+                        <div class="utme-subject-chip" data-value="government" onclick="utmeToggleSubject(this)">Government</div>
+                        <div class="utme-subject-chip" data-value="economics" onclick="utmeToggleSubject(this)">Economics</div>
+                        <div class="utme-subject-chip" data-value="irs" onclick="utmeToggleSubject(this)">IRS</div>
+                        <div class="utme-subject-chip" data-value="literature" onclick="utmeToggleSubject(this)">Literature</div>
+                        <div class="utme-subject-chip" data-value="crk" onclick="utmeToggleSubject(this)">CRS</div>
+                        <div class="utme-subject-chip" data-value="commerce" onclick="utmeToggleSubject(this)">Commerce</div>
+                        <div class="utme-subject-chip" data-value="accounting" onclick="utmeToggleSubject(this)">Accounting</div>
+                    </div>
+                </div>
+
+                <!-- Practice config (shown only in practice mode) -->
+                <div class="form-group" id="practice-config-group" style="display:none;">
+                    <label class="practice-config-label">Configure Practice Session:</label>
+                    <div id="dynamic-practice-inputs" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:0;"></div>
+                </div>
+
+                <!-- Access code (shown only in mock mode) -->
+                <div class="form-group" id="utme-code-group">
+                    <label class="main-label">Access Code 🔒</label>
+                    <small id="code-hint" class="utme-code-hint" style="margin-bottom:0.5rem;">Join the official WhatsApp channel to get today's code.</small>
+                    <input type="text" id="cand-code" class="form-control" placeholder="Enter today's access code" style="text-transform:uppercase;letter-spacing:2px;font-weight:700;">
+                </div>
+
+                <button type="button" class="btn btn-full" onclick="authenticateAndStart()" style="margin-top:0.5rem;">🚀 Start Exam</button>
+            </div>
+        </div>
+
+        <!-- Hidden auth-gate for JS compatibility (resume sessions etc.) -->
+        <div id="auth-gate" style="display:none;"></div>
+
+        <!-- ══ MY EXAM HISTORY ══════════════════════════════════════════════ -->
+        <div id="history-card" class="card" style="display:none;">
+            <button class="hub-back-btn" onclick="showUtmeHome()" style="margin-bottom:1rem;">← Back to UTME Home</button>
+            <h3 style="color:var(--primary);margin-bottom:4px;">📚 My Exam History</h3>
+            <p style="color:#888;font-size:0.85rem;margin-bottom:14px;">All your past attempts — tap "Review" to see
+                corrections.</p>
+            <div id="history-list">
+                <p style="text-align:center;color:#aaa;padding:20px;">Loading your history...</p>
+            </div>
+        </div>
+
+        <!-- ══ HISTORY CORRECTIONS MODAL ════════════════════════════════════ -->
+        <div id="history-modal"
+            style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;overflow-y:auto;">
+            <div
+                style="background:#fff;max-width:650px;margin:30px auto;border-radius:12px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+                <div
+                    style="background:#0056b3;color:#fff;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;">
+                    <h3 style="margin:0;" id="history-modal-title">Past Exam Review</h3>
+                    <button onclick="document.getElementById('history-modal').style.display='none'"
+                        style="background:none;border:none;color:#fff;font-size:1.5rem;cursor:pointer;line-height:1;">×</button>
+                </div>
+                <div id="history-modal-body" style="padding:20px;"></div>
+            </div>
+        </div>
+        <!-- ════════════════════════════════════════════════════════════════ -->
+
+        <div id="quiz-interface" class="card">
+            <div class="cbt-header">
+                <div>Candidate: <span id="disp-name" style="color:var(--primary);"></span></div>
+                <div id="live-counter" class="utme-live-counter">
+                    🟢 Connecting...
+                </div>
+                <div class="timer" id="timer-display">120:00</div>
+            </div>
+            <div class="tabs-container" id="subject-tabs"></div>
+            <div class="cbt-layout">
+                <div>
+                    <div id="passage-container" class="passage-box" style="display:none;"></div>
+                    <div class="question-text" id="question-text">Loading question...</div>
+                    <div class="options-container" id="options-container"></div>
+                    <div class="controls">
+                        <button class="btn" onclick="prevQuestion()" id="prev-btn"
+                            style="background:#6c757d;">Previous</button>
+                        <button class="btn" style="background: var(--error);" onclick="confirmSubmit()">Submit
+                            Exam</button>
+                        <button class="btn" onclick="nextQuestion()" id="next-btn">Next</button>
+                    </div>
+                </div>
+                <div class="grid-panel">
+                    <div class="grid-title">Question Navigator</div>
+                    <div class="number-grid" id="number-grid"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="result-interface" class="card" style="display:none; text-align:center;">
+            <button class="hub-back-btn" onclick="showUtmeHome()" style="margin-bottom:1rem; float:left;">← Back to UTME Home</button>
+            <div style="clear:both;"></div>
+            <h2 style="color: var(--primary);">Calculating Result...</h2>
+            <p>Please wait while we prepare your submission for WhatsApp.</p>
+        </div>
+    </div>
+
+    <div id="result-interface-alt" style="display:none; margin-top:20px;"></div>
+
+    <!-- ══ UTME STUDY HUB ═══════════════════════════════════════════════ -->
+    <div id="utme-study-hub-wrap">
+        <div class="hub-inner">
+            <button class="hub-back-btn" onclick="closeUtmeStudyHub()">← Back to UTME Home</button>
+
+            <!-- Subject selector -->
+            <div id="utme-hub-subject-screen">
+                <div class="hub-header">
+                    <h2>📚 UTME Study Hub</h2>
+                    <p>Select a subject to read bite-sized notes</p>
+                </div>
+                <div class="hub-subject-grid" id="utme-hub-subject-grid">
+                    <!-- Populated by openUtmeStudyHub() -->
+                </div>
+            </div>
+
+            <!-- Notes list -->
+            <div id="utme-hub-notes-screen" style="display:none;">
+                <button class="hub-back-btn" onclick="utmeHubShowSubjects()">← Back to Subjects</button>
+                <div class="hub-header">
+                    <h2 id="utme-hub-notes-title">📖 Notes</h2>
+                    <p id="utme-hub-notes-sub">Select a topic to start reading</p>
+                </div>
+                <div class="hub-notes-list" id="utme-hub-notes-list"></div>
+            </div>
+
+            <!-- Note viewer -->
+            <div id="utme-hub-viewer" style="display:none;">
+                <button class="hub-back-btn" onclick="utmeHubShowNotes()">← Back to Notes</button>
+                <div class="hub-header">
+                    <h2 id="utme-hub-viewer-title">📄 Note</h2>
+                    <p id="utme-hub-viewer-sub"></p>
+                </div>
+                <div class="note-content-box" id="utme-hub-note-content">Loading...</div>
+            </div>
+        </div>
+    </div>
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+
+    </div><!-- /#utme-screen -->
+    <!-- ══ UTME ADMIN PANEL ═════════════════════════════════════════════ -->
+    <div id="utme-admin-panel">
+        <div class="utme-admin-header">
+            <div>
+                <h2 style="margin:0 0 2px;font-size:1.15rem;">⚙️ UTME Admin Dashboard</h2>
+                <div style="font-size:0.72rem;opacity:0.75;">Inside OAU! UTME Management</div>
+            </div>
+            <button class="lb-back-btn" onclick="closeUtmeAdminPanel()">← Back</button>
+        </div>
+        <!-- Tabs -->
+        <div class="admin-tabs" style="margin:0.8rem 1rem 0;">
+            <button class="admin-tab active" onclick="utmeAdminSwitchTab('codes',this)">🔑 Daily Code</button>
+            <button class="admin-tab" onclick="utmeAdminSwitchTab('questions',this)">📝 Question Bank</button>
+            <button class="admin-tab" onclick="utmeAdminSwitchTab('notes',this)">📚 Study Notes</button>
+            <button class="admin-tab" onclick="utmeAdminSwitchTab('stats',this)">📊 Stats</button>
+        </div>
+        <div class="utme-admin-body">
+
+            <!-- ── TAB: Daily Access Code ────────────────────────────── -->
+            <div class="admin-tab-pane active" id="utme-adm-tab-codes">
+                <div class="admin-section">
+                    <h3>🔑 Set Today's UTME Access Code</h3>
+                    <p style="font-size:0.85rem;color:var(--th-text-2);margin-bottom:12px;">
+                        This code will be validated when students start a Mock exam. Students enter it in the Access Code field.
+                    </p>
+                    <div class="admin-field">
+                        <label>Today's Date</label>
+                        <input type="date" id="utme-adm-code-date" class="form-control">
+                    </div>
+                    <div class="admin-field">
+                        <label>Access Code (students will type this)</label>
+                        <input type="text" id="utme-adm-code-value" class="form-control" placeholder="e.g. BIG-NIFS-2026" style="font-weight:700;text-transform:uppercase;">
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.5rem;">
+                        <button class="admin-create-btn" onclick="utmeAdminSaveCode()">💾 Save Code</button>
+                        <button class="admin-create-btn" style="background:#374151;" onclick="utmeAdminLoadTodayCode()">🔄 Load Today's Code</button>
+                    </div>
+                    <div id="utme-adm-code-msg" style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>
+                </div>
+                <div class="admin-section">
+                    <h3>📋 Recent Codes</h3>
+                    <div id="utme-adm-codes-list"><p style="color:var(--th-text-2);font-size:0.85rem;text-align:center;">Click "Load Today's Code" to refresh.</p></div>
+                </div>
+            </div>
+
+            <!-- ── TAB: Question Bank ────────────────────────────────── -->
+            <div class="admin-tab-pane" id="utme-adm-tab-questions">
+                <div class="admin-section">
+                    <h3>📤 Bulk Upload via CSV</h3>
+                    <p style="color:var(--th-text-2);font-size:0.85rem;margin-bottom:12px;">
+                        CSV format: <code style="background:var(--th-input-bg);padding:2px 6px;border-radius:4px;font-size:0.78rem;">subject, question, option_a, option_b, option_c, option_d, correct_answer, explanation</code><br>
+                        <span style="font-size:0.78rem;">correct_answer = A, B, C, or D</span>
+                    </p>
+                    <div class="admin-field">
+                        <label>Upload CSV File</label>
+                        <input type="file" id="utme-adm-csv-file" accept=".csv" onchange="utmeAdminPreviewCSV(this)">
+                    </div>
+                    <p style="color:var(--th-text-2);font-size:0.82rem;margin:8px 0;">— or paste CSV text —</p>
+                    <div class="admin-field">
+                        <label>Paste CSV</label>
+                        <textarea id="utme-adm-csv-text" rows="5" style="width:100%;padding:8px;border:1px solid var(--th-border);border-radius:8px;background:var(--th-input-bg);color:var(--th-text);font-size:0.82rem;" placeholder="subject,question,option_a,option_b,option_c,option_d,correct_answer,explanation"></textarea>
+                    </div>
+                    <button class="admin-create-btn" style="background:#16a34a;" onclick="utmeAdminParseCSV()">👁 Preview Questions</button>
+                </div>
+                <div class="admin-section" id="utme-adm-csv-preview-section" style="display:none;">
+                    <h3>Preview (<span id="utme-adm-csv-count">0</span> questions)</h3>
+                    <div class="csv-preview" id="utme-adm-csv-preview"></div>
+                    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+                        <button class="admin-create-btn" style="background:#0056b3;" onclick="utmeAdminUploadQuestions()">⬆️ Upload to UTME Question Bank</button>
+                        <button class="admin-create-btn" style="background:#6c757d;flex:0 0 auto;width:auto;padding:12px 20px;" onclick="document.getElementById('utme-adm-csv-preview-section').style.display='none'">Cancel</button>
+                    </div>
+                    <div id="utme-adm-upload-msg" style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>
+                </div>
+            </div>
+
+            <!-- ── TAB: Study Notes ──────────────────────────────────── -->
+            <div class="admin-tab-pane" id="utme-adm-tab-notes">
+                <div class="admin-section">
+                    <h3>✏️ Add UTME Study Note</h3>
+                    <div class="admin-form-grid">
+                        <div class="admin-field">
+                            <label>Subject</label>
+                            <select id="utme-adm-note-subject" class="form-control">
+                                <option value="english">English</option>
+                                <option value="mathematics">Mathematics</option>
+                                <option value="biology">Biology</option>
+                                <option value="physics">Physics</option>
+                                <option value="chemistry">Chemistry</option>
+                                <option value="economics">Economics</option>
+                                <option value="government">Government</option>
+                                <option value="literature">Literature</option>
+                                <option value="irs">IRS</option>
+                                <option value="crk">CRS</option>
+                                <option value="commerce">Commerce</option>
+                                <option value="accounting">Accounting</option>
+                            </select>
+                        </div>
+                        <div class="admin-field full">
+                            <label>Note Title</label>
+                            <input type="text" id="utme-adm-note-title" class="form-control" placeholder="e.g. Tenses in English Grammar">
+                        </div>
+                        <div class="admin-field full">
+                            <label>Content (HTML supported)</label>
+                            <textarea id="utme-adm-note-content" rows="8" style="width:100%;padding:10px;border:1px solid var(--th-border);border-radius:8px;background:var(--th-input-bg);color:var(--th-text);font-size:0.88rem;" placeholder="Write note content here..."></textarea>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.5rem;">
+                        <button class="admin-create-btn" onclick="utmeAdmNoteSave()">💾 Save Note</button>
+                    </div>
+                    <div id="utme-adm-note-msg" style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>
+                </div>
+                <div class="admin-section">
+                    <h3>📋 Existing UTME Notes</h3>
+                    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                        <select id="utme-adm-notes-filter-sub" style="padding:6px 10px;border:1px solid var(--th-border);border-radius:6px;font-size:0.85rem;background:var(--th-input-bg);color:var(--th-text);" onchange="utmeAdminLoadNotes()">
+                            <option value="">All Subjects</option>
+                            <option value="english">English</option>
+                            <option value="mathematics">Mathematics</option>
+                            <option value="biology">Biology</option>
+                            <option value="physics">Physics</option>
+                            <option value="chemistry">Chemistry</option>
+                            <option value="economics">Economics</option>
+                            <option value="government">Government</option>
+                        </select>
+                        <button onclick="utmeAdminLoadNotes()" style="background:var(--th-primary);color:#fff;border:none;padding:7px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.82rem;">🔄 Refresh</button>
+                    </div>
+                    <div id="utme-adm-notes-list"><p style="color:var(--th-text-2);font-size:0.85rem;text-align:center;">Click Refresh to load notes.</p></div>
+                </div>
+            </div>
+
+            <!-- ── TAB: Stats ────────────────────────────────────────── -->
+            <div class="admin-tab-pane" id="utme-adm-tab-stats">
+                <div class="admin-section">
+                    <h3>📊 UTME Platform Overview</h3>
+                    <button class="admin-create-btn" style="background:#374151;margin-bottom:14px;" onclick="utmeAdminLoadStats()">🔄 Refresh Stats</button>
+                    <div class="stat-grid" id="utme-adm-stat-grid">
+                        <div class="stat-card"><div class="stat-num" id="utme-stat-exams">—</div><div class="stat-label">Total Exams Taken</div></div>
+                        <div class="stat-card" style="border-top-color:#16a34a;"><div class="stat-num" id="utme-stat-mock" style="color:#16a34a;">—</div><div class="stat-label">Mock Exams</div></div>
+                        <div class="stat-card" style="border-top-color:#0056b3;"><div class="stat-num" id="utme-stat-practice" style="color:#0056b3;">—</div><div class="stat-label">Practice Exams</div></div>
+                        <div class="stat-card" style="border-top-color:#7c3aed;"><div class="stat-num" id="utme-stat-avg" style="color:#7c3aed;">—</div><div class="stat-label">Avg Score %</div></div>
+                    </div>
+                </div>
+                <div class="admin-section">
+                    <h3>🕐 Recent UTME Exams</h3>
+                    <div id="utme-adm-recent-exams"><p style="color:var(--th-text-2);font-size:0.85rem;text-align:center;">Click Refresh Stats above.</p></div>
+                </div>
+            </div>
+
+        </div><!-- /utme-admin-body -->
+    </div><!-- /#utme-admin-panel -->
+
+    <!-- UTME Admin FAB -->
+    <button id="utme-admin-fab" onclick="openUtmeAdminPanel()" title="UTME Admin Panel">⚙️</button>
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+
+    <div id="simple-calc-box">
+        <div class="utme-calc-header">
+            <span>InsideOAU!𓃵 Calculator</span>
+            <button class="utme-calc-close" onclick="toggleCalc()">✕</button>
+        </div>
+        <input type="text" id="calc-screen" readonly>
+        <div class="calc-grid">
+            <button onclick="press('7')">7</button><button onclick="press('8')">8</button><button
+                onclick="press('9')">9</button><button onclick="press('/')">÷</button>
+            <button onclick="press('4')">4</button><button onclick="press('5')">5</button><button
+                onclick="press('6')">6</button><button onclick="press('*')">×</button>
+            <button onclick="press('1')">1</button><button onclick="press('2')">2</button><button
+                onclick="press('3')">3</button><button onclick="press('-')">−</button>
+            <button onclick="press('0')">0</button><button onclick="press('.')">.</button><button onclick="solve()"
+                style="background: orange;">=</button><button onclick="press('+')">+</button>
+            <button onclick="document.getElementById('calc-screen').value=''"
+                style="grid-column: span 4; background: #888;">Clear</button>
+        </div>
+    </div>
+    <button onclick="toggleCalc()"
+        style="position:fixed; bottom:20px; right:20px; border-radius:50%; width:55px; height:55px; background:var(--th-primary); color: #fff; border:none; font-size: 24px; cursor:pointer; z-index:99999; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">🖩</button>
+
+        <script src="main.js"></script>
+</body>
+</html>

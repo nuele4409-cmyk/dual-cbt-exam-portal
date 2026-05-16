@@ -16830,10 +16830,39 @@
         }
 
         if (btnDis) btnDis.addEventListener('click', hideBanner);
-        window.addEventListener('appinstalled', hideBanner);
+        window.addEventListener('appinstalled', function() {
+            hideBanner();
+            _pwaShowToast('✅ App installed! Open it from your home screen.');
+        });
+
+        // If already running as installed PWA, show a welcome indicator once
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+            try {
+                if (!sessionStorage.getItem('pwa_welcomed')) {
+                    sessionStorage.setItem('pwa_welcomed', '1');
+                    setTimeout(function() {
+                        _pwaShowToast('📲 Running as installed app');
+                    }, 1500);
+                }
+            } catch(e) {}
+        }
 
         // Show banner after 4 seconds on every platform
         setTimeout(showBanner, 4000);
     });
 }());
+// PWA toast helper (used by install banner)
+function _pwaShowToast(msg) {
+    var t = document.getElementById('pwa-toast');
+    if (!t) {
+        t = document.createElement('div');
+        t.id = 'pwa-toast';
+        document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.className = 'pwa-toast-show';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function() { t.className = ''; }, 3500);
+}
+
 // ─────────────────────────────────────────────────────────────

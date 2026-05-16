@@ -16866,3 +16866,60 @@ function _pwaShowToast(msg) {
 }
 
 // ─────────────────────────────────────────────────────────────
+
+// ── PWA Update Detection ──────────────────────────────────────
+(function() {
+    if (!('serviceWorker' in navigator)) return;
+
+    var _waitingWorker = null;
+
+    function showUpdateToast() {
+        var t = document.getElementById('pwa-update-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'pwa-update-toast';
+            t.innerHTML = '🔄 Update available — <strong>tap to refresh</strong>';
+            t.style.cssText = [
+                'position:fixed', 'bottom:90px', 'left:50%',
+                'transform:translateX(-50%)', 'background:#d4a017',
+                'color:#1a2742', 'border-radius:24px', 'padding:12px 22px',
+                'font-size:0.85rem', 'font-weight:700', 'white-space:nowrap',
+                'z-index:9999999', 'cursor:pointer', 'box-shadow:0 4px 16px rgba(0,0,0,0.3)',
+                'animation:pwa-slide-up 0.35s ease'
+            ].join(';');
+            t.addEventListener('click', function() {
+                if (_waitingWorker) {
+                    _waitingWorker.postMessage('SKIP_WAITING');
+                }
+                t.innerHTML = '⏳ Refreshing…';
+                t.style.cursor = 'default';
+            });
+            document.body.appendChild(t);
+        }
+    }
+
+    // Reload the page once the new SW takes control
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+        window.location.reload();
+    });
+
+    navigator.serviceWorker.ready.then(function(reg) {
+        // New SW found while page is open
+        reg.addEventListener('updatefound', function() {
+            var newWorker = reg.installing;
+            newWorker.addEventListener('statechange', function() {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    _waitingWorker = newWorker;
+                    showUpdateToast();
+                }
+            });
+        });
+
+        // SW was already waiting when the page loaded (e.g. tab was left open)
+        if (reg.waiting && navigator.serviceWorker.controller) {
+            _waitingWorker = reg.waiting;
+            showUpdateToast();
+        }
+    });
+}());
+// ─────────────────────────────────────────────────────────────

@@ -18,11 +18,10 @@ const PRECACHE = [
 ];
 
 // ── INSTALL: pre-cache the app shell ─────────────────────────
+// NOTE: No skipWaiting() here — we wait for user to confirm update
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE)
-      .then(cache => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE).then(cache => cache.addAll(PRECACHE))
   );
 });
 
@@ -35,6 +34,13 @@ self.addEventListener('activate', event => {
       )
     ).then(() => self.clients.claim())
   );
+});
+
+// ── MESSAGE: allow page to trigger skipWaiting ───────────────
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // ── FETCH ─────────────────────────────────────────────────────

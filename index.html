@@ -968,7 +968,7 @@
 
         <!-- ── UTME Hero Bar ─────────────────────────────────────────── -->
         <div id="utme-hero-bar">
-            <button class="back-to-portal" onclick="showPortalSelector()" style="position:absolute;top:1rem;left:1rem;color:rgba(255,255,255,0.85);text-decoration:none;font-size:0.82rem;background:none;border:none;cursor:pointer;">← Portal</button>
+            <button type="button" class="back-to-portal" onclick="(function(){var s=document.getElementById('utme-screen'),p=document.getElementById('portal-selector');if(s)s.style.display='none';if(p){p.style.display='';p.classList.add('visible');}if(typeof showPortalSelector==='function')showPortalSelector();})();" style="position:absolute;top:1rem;left:1rem;color:rgba(255,255,255,0.85);text-decoration:none;font-size:0.82rem;background:none;border:none;cursor:pointer;">← Portal</button>
             <div class="utme-hero-name" id="utme-hero-name">Inside OAU!𓃵 UTME</div>
             <div class="utme-hero-sub">JAMB CBT Practice &amp; Mock Exams</div>
             <div class="utme-hero-id" id="utme-hero-id">Loading ID…</div>

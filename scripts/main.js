@@ -16776,3 +16776,62 @@
             try { saved = localStorage.getItem('app_theme') || 'saas'; } catch(e) {}
             setTheme(saved);
         }());
+
+// ── PWA Install Banner ────────────────────────────────────────
+(function() {
+    // Already installed as PWA — hide everything
+    if (window.matchMedia('(display-mode: standalone)').matches) return;
+    if (window.navigator.standalone === true) return; // iOS standalone
+    // Previously dismissed
+    try { if (localStorage.getItem('pwa_dismissed')) return; } catch(e) {}
+
+    var deferredPrompt = null;
+    var banner  = document.getElementById('pwa-install-banner');
+    var btnInst = document.getElementById('pwa-install-btn');
+    var btnDis  = document.getElementById('pwa-dismiss-btn');
+    var subText = document.getElementById('pwa-banner-sub');
+    if (!banner) return;
+
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+
+    function showBanner() {
+        banner.style.display = 'flex';
+    }
+    function hideBanner() {
+        banner.style.display = 'none';
+        try { localStorage.setItem('pwa_dismissed', '1'); } catch(e) {}
+    }
+
+    // Android / Chrome — wait for browser install prompt
+    window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        setTimeout(showBanner, 3500);
+    });
+
+    // iOS — show manual instructions instead
+    if (isIOS) {
+        if (subText) subText.textContent = 'Tap the Share button 📤 then "Add to Home Screen"';
+        if (btnInst) btnInst.style.display = 'none'; // no prompt API on iOS
+        setTimeout(showBanner, 3500);
+    }
+
+    // Install button (Android)
+    if (btnInst) {
+        btnInst.addEventListener('click', function() {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(function(result) {
+                if (result.outcome === 'accepted') hideBanner();
+                deferredPrompt = null;
+            });
+        });
+    }
+
+    // Dismiss
+    if (btnDis) btnDis.addEventListener('click', hideBanner);
+
+    // Auto-hide once installed
+    window.addEventListener('appinstalled', hideBanner);
+}());
+// ─────────────────────────────────────────────────────────────

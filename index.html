@@ -1393,3 +1393,18 @@
         </script>
 </body>
 </html>
+        <script>
+        // Portal back button — direct DOM wiring
+        document.getElementById('utme-back-btn').addEventListener('click', function() {
+            var s = document.getElementById('utme-screen');
+            var p = document.getElementById('portal-selector');
+            if (s) s.style.display = 'none';
+            if (p) { p.style.display = 'block'; p.classList.add('visible'); }
+            if (typeof showPortalSelector === 'function') showPortalSelector();
+        });
+        </script>
+</body>
+</html>
+        </script>
+</body>
+</html>

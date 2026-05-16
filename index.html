@@ -968,7 +968,7 @@
 
         <!-- ── UTME Hero Bar ─────────────────────────────────────────── -->
         <div id="utme-hero-bar">
-            <button type="button" class="back-to-portal" onclick="(function(){var s=document.getElementById('utme-screen'),p=document.getElementById('portal-selector');if(s)s.style.display='none';if(p){p.style.display='';p.classList.add('visible');}if(typeof showPortalSelector==='function')showPortalSelector();})();" style="position:absolute;top:1rem;left:1rem;color:rgba(255,255,255,0.85);text-decoration:none;font-size:0.82rem;background:none;border:none;cursor:pointer;">← Portal</button>
+            <button type="button" id="utme-back-btn" class="back-to-portal" style="position:absolute;top:1rem;left:1rem;color:rgba(255,255,255,0.85);text-decoration:none;font-size:0.82rem;background:none;border:none;cursor:pointer;z-index:10;">← Portal</button>
             <div class="utme-hero-name" id="utme-hero-name">Inside OAU!𓃵 UTME</div>
             <div class="utme-hero-sub">JAMB CBT Practice &amp; Mock Exams</div>
             <div class="utme-hero-id" id="utme-hero-id">Loading ID…</div>
@@ -1381,5 +1381,15 @@
         style="position:fixed; bottom:20px; right:20px; border-radius:50%; width:55px; height:55px; background:var(--th-primary); color: #fff; border:none; font-size: 24px; cursor:pointer; z-index:99999; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">🖩</button>
 
         <script src="scripts/main.js"></script>
+        <script>
+        // ← Portal button — direct DOM wiring, bypasses all onclick/scope issues
+        document.getElementById('utme-back-btn').addEventListener('click', function() {
+            var s = document.getElementById('utme-screen');
+            var p = document.getElementById('portal-selector');
+            if (s) s.style.display = 'none';
+            if (p) { p.style.display = 'block'; p.classList.add('visible'); }
+            if (typeof showPortalSelector === 'function') showPortalSelector();
+        });
+        </script>
 </body>
 </html>

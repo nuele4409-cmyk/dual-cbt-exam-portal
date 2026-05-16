@@ -16780,23 +16780,3 @@
             try { saved = localStorage.getItem('app_theme') || 'saas'; } catch(e) {}
             setTheme(saved);
         }());
-theme-switcher')) {
-                                var o = document.getElementById('theme-options');
-                                if (o) o.classList.remove('open');
-                                document.removeEventListener('click', _close);
-                            }
-                        });
-                    }, 10);
-                }
-            }
-
-            // Expose globally so onclick="" attributes work
-            window.setTheme        = setTheme;
-            window._toggleThemeMenu = _toggleThemeMenu;
-
-            // Apply saved theme immediately (anti-FOUC already ran in <head>,
-            // but this ensures button active-states are painted correctly)
-            var saved = 'saas';
-            try { saved = localStorage.getItem('app_theme') || 'saas'; } catch(e) {}
-            setTheme(saved);
-        }());

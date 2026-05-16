@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- v2 -->
 <html lang="en">
 
 <head>
@@ -157,6 +156,17 @@
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- ── PWA manifest & meta ─────────────────────────── -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1a2742">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CBT APP">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png">
+    <!-- ─────────────────────────────────────────────────── -->
     <title>Inside OAU!𓃵 - Official UTME CBT</title>
     <!-- Chart.js for Performance Analytics -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -969,7 +979,7 @@
 
         <!-- ── UTME Hero Bar ─────────────────────────────────────────── -->
         <div id="utme-hero-bar">
-            <button type="button" id="utme-back-btn" class="back-to-portal" style="position:absolute;top:1rem;left:1rem;color:rgba(255,255,255,0.85);text-decoration:none;font-size:0.82rem;background:none;border:none;cursor:pointer;z-index:10;">← Portal</button>
+            <button class="back-to-portal" onclick="showPortalSelector()" style="position:absolute;top:1rem;left:1rem;color:rgba(255,255,255,0.85);text-decoration:none;font-size:0.82rem;background:none;border:none;cursor:pointer;">← Portal</button>
             <div class="utme-hero-name" id="utme-hero-name">Inside OAU!𓃵 UTME</div>
             <div class="utme-hero-sub">JAMB CBT Practice &amp; Mock Exams</div>
             <div class="utme-hero-id" id="utme-hero-id">Loading ID…</div>
@@ -1382,31 +1392,29 @@
         style="position:fixed; bottom:20px; right:20px; border-radius:50%; width:55px; height:55px; background:var(--th-primary); color: #fff; border:none; font-size: 24px; cursor:pointer; z-index:99999; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">🖩</button>
 
         <script src="scripts/main.js"></script>
-        <script>
-        // ← Portal button — direct DOM wiring, bypasses all onclick/scope issues
-        var _backBtn = document.getElementById('utme-back-btn');
-        if (_backBtn) _backBtn.addEventListener('click', function() {
-            var s = document.getElementById('utme-screen');
-            var p = document.getElementById('portal-selector');
-            if (s) s.style.display = 'none';
-            if (p) { p.style.display = 'block'; p.classList.add('visible'); }
-            if (typeof showPortalSelector === 'function') showPortalSelector();
+
+    <!-- ── Service Worker Registration ─────────────────── -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js')
+                .then(function(reg) { console.log('[SW] Registered:', reg.scope); })
+                .catch(function(err) { console.warn('[SW] Registration failed:', err); });
         });
-        </script>
+    }
+    </script>
+    <!-- ─────────────────────────────────────────────────── -->
 </body>
-</html>
-        <script>
-        // Portal back button — direct DOM wiring
-        document.getElementById('utme-back-btn').addEventListener('click', function() {
-            var s = document.getElementById('utme-screen');
-            var p = document.getElementById('portal-selector');
-            if (s) s.style.display = 'none';
-            if (p) { p.style.display = 'block'; p.classList.add('visible'); }
-            if (typeof showPortalSelector === 'function') showPortalSelector();
-        });
+</html>tTheme;
+            window._toggleThemeMenu = _toggleThemeMenu;
+
+            // Apply saved theme immediately (anti-FOUC already ran in <head>,
+            // but this ensures button active-states are painted correctly)
+            var saved = 'saas';
+            try { saved = localStorage.getItem('app_theme') || 'saas'; } catch(e) {}
+            setTheme(saved);
+        }());
         </script>
-</body>
-</html>
-        </script>
+        <script src="scripts/main.js"></script>
 </body>
 </html>

@@ -13988,6 +13988,7 @@
             {code:'MOUAU',name:'Michael Okpara University of Agriculture, Umudike'},
             {code:'UAM',name:'University of Agriculture, Makurdi'},
             {code:'FUPRE',name:'Federal University of Petroleum Resources, Effurun'},
+            {code:'UNIMED',name:'University of Medical Sciences, Ondo'},
             {code:'ATBU',name:'Abubakar Tafawa Balewa University, Bauchi'},
             {code:'NDA',name:'Nigerian Defence Academy, Kaduna'},
             {code:'FUOYE',name:'Federal University, Oye-Ekiti'},
@@ -14010,6 +14011,8 @@
             {code:'AAUA',name:'Adekunle Ajasin University, Akungba-Akoko'},
             {code:'AAU',name:'Ambrose Alli University, Ekpoma'},
             {code:'DELSU',name:'Delta State University, Abraka'},
+            {code:'UNIDEL',name:'University of Delta, Agbor'},
+            {code:'ESUT',name:'Enugu State University of Science and Technology, Enugu'},
             {code:'COOU',name:'Chukwuemeka Odumegwu Ojukwu University'},
             {code:'IMSU',name:'Imo State University, Owerri'},
             {code:'ABSU',name:'Abia State University, Uturu'},
@@ -14227,12 +14230,23 @@
             if (homeEl) homeEl.style.display = 'block';
         }
 
+        // Universities that use Aptitude Test as their mandatory first subject
+        var _APTITUDE_TEST_UNIS = ['OAU', 'UNILAG', 'UNILORIN', 'UI'];
+
         function openSubjectModal(mode) {
             if (!_selectedUni) { alert('Please select and save your university first.'); return; }
             _pendingExamMode = mode;
             var list = document.getElementById('subject-chip-list');
             if (!list) return;
-            list.innerHTML = PUTME_SUBJECTS.map(function (s) {
+
+            // Swap locked subject: Aptitude Test for OAU/UNILAG/UNILORIN/UI, English for everyone else
+            var useAptitude = _APTITUDE_TEST_UNIS.indexOf(_selectedUni) !== -1;
+            var lockedSubject = useAptitude
+                ? { id: 'aptitude', label: 'Aptitude Test', locked: true }
+                : { id: 'english', label: 'Use of English', locked: true };
+            var effectiveSubjects = [lockedSubject].concat(PUTME_SUBJECTS.slice(1));
+
+            list.innerHTML = effectiveSubjects.map(function (s) {
                 var cls = s.locked ? 'subject-chip locked' : 'subject-chip';
                 var onclick = s.locked ? '' : 'onclick="toggleSubject(\'' + s.id + '\')"';
                 return '<div class="' + cls + '" id="chip-' + s.id + '" ' + onclick + '>' +
@@ -16747,6 +16761,26 @@
                     setTimeout(function(){
                         document.addEventListener('click', function _close(e){
                             if (!e.target.closest('#theme-switcher')) {
+                                var o = document.getElementById('theme-options');
+                                if (o) o.classList.remove('open');
+                                document.removeEventListener('click', _close);
+                            }
+                        });
+                    }, 10);
+                }
+            }
+
+            // Expose globally so onclick="" attributes work
+            window.setTheme        = setTheme;
+            window._toggleThemeMenu = _toggleThemeMenu;
+
+            // Apply saved theme immediately (anti-FOUC already ran in <head>,
+            // but this ensures button active-states are painted correctly)
+            var saved = 'saas';
+            try { saved = localStorage.getItem('app_theme') || 'saas'; } catch(e) {}
+            setTheme(saved);
+        }());
+theme-switcher')) {
                                 var o = document.getElementById('theme-options');
                                 if (o) o.classList.remove('open');
                                 document.removeEventListener('click', _close);

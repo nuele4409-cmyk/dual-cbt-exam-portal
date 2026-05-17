@@ -12102,8 +12102,8 @@
                 document.getElementById('disp-name').innerText = name;
                 var ag = document.getElementById('auth-gate');       if (ag) ag.style.display = 'none';
                 var cc = document.getElementById('community-card');  if (cc) cc.style.display = 'none';
-                var hv = document.getElementById('utme-home-view');  if (hv) hv.classList.add('hidden');
-                var mp = document.getElementById('utme-mode-panel'); if (mp) mp.classList.remove('active');
+                var hv = document.getElementById('utme-home-view');  if (hv) hv.style.display = 'none';
+                var mp = document.getElementById('utme-mode-panel'); if (mp) mp.style.display = 'none';
                 document.getElementById('quiz-interface').style.display = 'block';
 
                 startTimer();
@@ -12121,13 +12121,13 @@
                     var _qi = document.getElementById('quiz-interface');
                     if (_qi) _qi.style.display = 'none';
                     var _hv2 = document.getElementById('utme-home-view');
-                    if (_hv2) _hv2.classList.remove('hidden');
+                    if (_hv2) _hv2.style.display = 'block';
                     var _ag2 = document.getElementById('auth-gate');
-                    if (_ag2) _ag2.style.display = '';
+                    if (_ag2) _ag2.style.display = 'none';
                     var _cc2 = document.getElementById('community-card');
                     if (_cc2) _cc2.style.display = '';
                     var _mp2 = document.getElementById('utme-mode-panel');
-                    if (_mp2) _mp2.classList.add('active');
+                    if (_mp2) _mp2.style.display = 'block';
                 } catch(e2) {}
                 alert('Something went wrong starting the exam. Please try again.');
             }
@@ -12750,9 +12750,10 @@
             var codeGroup = document.getElementById('utme-code-group');
             if (codeGroup) codeGroup.style.display = 'block';
             updatePracticeInputs();
-            document.getElementById('utme-home-view').classList.add('hidden');
-            document.getElementById('utme-mode-panel').classList.add('active');
+            document.getElementById('utme-home-view').style.display = 'none';
+            document.getElementById('utme-mode-panel').style.display = 'block';
             window.scrollTo(0,0);
+            var us = document.getElementById('utme-screen'); if (us) us.scrollTop = 0;
         }
 
         function openUtmePracticeMode() {
@@ -12764,15 +12765,17 @@
             var codeGroup = document.getElementById('utme-code-group');
             if (codeGroup) codeGroup.style.display = 'none';
             updatePracticeInputs();
-            document.getElementById('utme-home-view').classList.add('hidden');
-            document.getElementById('utme-mode-panel').classList.add('active');
+            document.getElementById('utme-home-view').style.display = 'none';
+            document.getElementById('utme-mode-panel').style.display = 'block';
             window.scrollTo(0,0);
+            var us = document.getElementById('utme-screen'); if (us) us.scrollTop = 0;
         }
 
         function closeUtmeModePanel() {
-            document.getElementById('utme-mode-panel').classList.remove('active');
-            document.getElementById('utme-home-view').classList.remove('hidden');
+            document.getElementById('utme-mode-panel').style.display = 'none';
+            document.getElementById('utme-home-view').style.display = 'block';
             window.scrollTo(0,0);
+            var us = document.getElementById('utme-screen'); if (us) us.scrollTop = 0;
         }
 
         function utmeToggleSubject(chip) {

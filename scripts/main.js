@@ -11981,8 +11981,13 @@
 
         function pickRandomQuestions(arr, num) {
             if (!arr || arr.length === 0) return [];
-            let shuffled = [...arr].sort(() => 0.5 - Math.random());
-            return shuffled.slice(0, num);
+            // Fisher-Yates shuffle — truly random, unbiased
+            var pool = arr.slice();
+            for (var i = pool.length - 1; i > 0; i--) {
+                var j = Math.floor(Math.random() * (i + 1));
+                var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+            }
+            return pool.slice(0, num);
         }
         // --- END OF BOUNCER ---
 

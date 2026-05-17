@@ -11992,9 +11992,14 @@
             const name = document.getElementById('cand-name').value.trim();
             const regNum = document.getElementById('cand-reg').value.trim();
 
+            // ── Admin fast-path: skip all Supabase wait checks ───────────────
+            var _ADMIN_EMAIL = 'nuele4409@gmail.com';
+            var _isAdminUser = window._authUser && window._authUser.email &&
+                               window._authUser.email.toLowerCase() === _ADMIN_EMAIL;
+
             // ── FEATURE 4: Anti-Cheat — block retakes for Mock mode ────────────
             const mode_check = document.getElementById('exam-mode').value;
-            if (mode_check === 'mock' && window.cloudCheckRetake) {
+            if (!_isAdminUser && mode_check === 'mock' && window.cloudCheckRetake) {
                 const idForCheck = localStorage.getItem("inside_oau_id") || regNum;
                 const existingResult = await window.cloudCheckRetake(idForCheck);
                 if (existingResult) {
@@ -12006,7 +12011,7 @@
             // ── Resume check — works for BOTH practice AND mock ───────────────
             // Practice: instant, no code needed again
             // Mock: skips code check if resuming (already validated when session started)
-            if (name && window.cloudCheckResume) {
+            if (!_isAdminUser && name && window.cloudCheckResume) {
                 const session = await window.cloudCheckResume();
                 if (session && session.examData && Object.keys(session.examData).length > 0 && session.timeLeft > 0) {
                     const savedMode = session.examMode || 'mock';

@@ -12097,6 +12097,32 @@
             electives.forEach(chip => subjectKeys.push(chip.dataset.value.toLowerCase()));
 
             examData = {}; userAnswers = {};
+
+            // ── Fetch Supabase questions for selected subjects ────────────────
+            var _sbQBank = {};
+            try {
+                if (window._supabase) {
+                    var _sbRes = await window._supabase
+                        .from('utme_questions')
+                        .select('subject,question,option_a,option_b,option_c,option_d,correct_answer,explanation,passage')
+                        .in('subject', subjectKeys);
+                    if (_sbRes && _sbRes.data && _sbRes.data.length) {
+                        var _ansMap = { A:0, B:1, C:2, D:3 };
+                        _sbRes.data.forEach(function(row) {
+                            var subj = row.subject.toLowerCase();
+                            if (!_sbQBank[subj]) _sbQBank[subj] = [];
+                            _sbQBank[subj].push({
+                                question:    row.question,
+                                options:     [row.option_a, row.option_b, row.option_c, row.option_d],
+                                answer:      _ansMap[row.correct_answer] !== undefined ? _ansMap[row.correct_answer] : 0,
+                                explanation: row.explanation || '',
+                                passage:     row.passage || null
+                            });
+                        });
+                    }
+                }
+            } catch(_sbErr) { console.warn('Supabase Q fetch failed, using local only:', _sbErr); }
+
             subjectKeys.forEach(key => {
                 let limit;
                 if (mode === 'mock') {
@@ -12104,7 +12130,9 @@
                 } else {
                     limit = parseInt(document.getElementById(`count-${key}`).value) || 10;
                 }
-                examData[key] = pickRandomQuestions(quizData[key], limit);
+                // Merge Supabase questions first, then hardcoded fallback
+                var _merged = (_sbQBank[key] || []).concat(quizData[key] || []);
+                examData[key] = pickRandomQuestions(_merged, limit);
                 userAnswers[key] = {};
             });
 
@@ -13400,19 +13428,46 @@
             var msgEl = document.getElementById('utme-adm-upload-msg');
             var rows = window._utmeCSVParsed;
             if (!rows || !rows.length) { alert('No parsed questions to upload.'); return; }
+            if (!window._supabase) { alert('Not connected to UTME database.'); return; }
             msgEl.style.display = 'block'; msgEl.style.color = '#888';
-            msgEl.textContent = 'Uploading ' + rows.length + ' questions…';
-            // Insert directly into the in-memory quizData for this session
-            var loaded = 0;
-            rows.forEach(function(q) {
-                var subj = q.subject;
-                if (!window.quizData) window.quizData = {};
-                if (!window.quizData[subj]) window.quizData[subj] = [];
-                window.quizData[subj].push({ question: q.question, options: q.options, answer: q.answer, explanation: q.explanation });
-                loaded++;
-            });
-            msgEl.style.color = '#16a34a';
-            msgEl.textContent = "✅ " + loaded + " questions loaded into this session's question bank!";
+            msgEl.textContent = 'Uploading ' + rows.length + ' questions to Supabase…';
+            try {
+                var letters = ['A','B','C','D'];
+                var batch = rows.map(function(q) {
+                    return {
+                        subject:        q.subject.toLowerCase(),
+                        question:       q.question,
+                        option_a:       q.options[0],
+                        option_b:       q.options[1],
+                        option_c:       q.options[2],
+                        option_d:       q.options[3],
+                        correct_answer: letters[q.answer] || 'A',
+                        explanation:    q.explanation || ''
+                    };
+                });
+                // Insert in chunks of 50
+                var CHUNK = 50;
+                var inserted = 0;
+                for (var ci = 0; ci < batch.length; ci += CHUNK) {
+                    var chunk = batch.slice(ci, ci + CHUNK);
+                    var res = await window._supabase.from('utme_questions').insert(chunk);
+                    if (res.error) throw res.error;
+                    inserted += chunk.length;
+                    msgEl.textContent = 'Saving… ' + inserted + ' / ' + batch.length;
+                }
+                // Also merge into session memory so exam works immediately
+                rows.forEach(function(q) {
+                    var subj = q.subject.toLowerCase();
+                    if (!window.quizData) window.quizData = {};
+                    if (!window.quizData[subj]) window.quizData[subj] = [];
+                    window.quizData[subj].push({ question: q.question, options: q.options, answer: q.answer, explanation: q.explanation || '' });
+                });
+                msgEl.style.color = '#16a34a';
+                msgEl.textContent = '✅ ' + inserted + ' questions saved to Supabase permanently!';
+            } catch(e) {
+                msgEl.style.color = '#dc3545';
+                msgEl.textContent = '❌ Error: ' + (e.message || e);
+            }
         }
 
         // ── UTME Admin Study Notes ────────────────────────────────────────

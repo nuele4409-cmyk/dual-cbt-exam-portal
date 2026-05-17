@@ -12109,8 +12109,9 @@
                 renderTabs(subjectKeys);
                 loadQuestion();
 
-                if (window.registerPresence) window.registerPresence();
-                if (window.initLeaderboard)  window.initLeaderboard();
+                // Non-critical: presence & leaderboard — must NOT crash the exam
+                try { if (window.registerPresence) window.registerPresence(); } catch(e) { console.warn('[presence]', e); }
+                try { if (window.initLeaderboard)  window.initLeaderboard();  } catch(e) { console.warn('[leaderboard]', e); }
 
             } catch(err) {
                 console.error('[authenticateAndStart] error:', err);
@@ -12127,7 +12128,7 @@
                     var _mp2 = document.getElementById('utme-mode-panel');
                     if (_mp2) _mp2.classList.add('active');
                 } catch(e2) {}
-                alert('Exam start error: ' + (err && err.message ? err.message : String(err)));
+                alert('Something went wrong starting the exam. Please try again.');
             }
         }
 

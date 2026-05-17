@@ -13164,18 +13164,28 @@
             if (old) old.remove();
             var b = document.createElement('div');
             b.id = 'refresh-reminder-banner';
+
+            function _dismissBanner() {
+                var el = document.getElementById('refresh-reminder-banner');
+                if (el) el.remove();
+                document.body.classList.remove('has-refresh-banner');
+            }
+
             b.innerHTML =
                 '<span class="rrb-text">🔄 <strong>Always refresh the app</strong> when you log in to get the latest updates &amp; questions!</span>' +
                 '<div class="rrb-actions">' +
                   '<button id="rrb-refresh-btn" onclick="window.location.reload()">Refresh Now</button>' +
-                  '<button id="rrb-close-btn" title="Dismiss" onclick="var el=document.getElementById(&quot;refresh-reminder-banner&quot;);if(el)el.remove();">✕</button>' +
+                  '<button id="rrb-close-btn" title="Dismiss">✕</button>' +
                 '</div>';
             document.body.appendChild(b);
+            document.body.classList.add('has-refresh-banner');
+
+            // Wire close button after DOM insertion
+            var closeBtn = document.getElementById('rrb-close-btn');
+            if (closeBtn) closeBtn.addEventListener('click', _dismissBanner);
+
             // Auto-dismiss after 20 s if not acted on
-            setTimeout(function () {
-                var el = document.getElementById('refresh-reminder-banner');
-                if (el) el.remove();
-            }, 20000);
+            setTimeout(_dismissBanner, 20000);
         }
 
         // ── On Auth Success ───────────────────────────────────────────────

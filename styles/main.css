@@ -3705,6 +3705,11 @@
 }
 /* ─────────────────────────────────────────────────────────── */
 
+/* ── Portal selector offset when refresh banner is visible ──────── */
+body.has-refresh-banner #portal-selector {
+    padding-top: 68px;
+}
+
 /* ── Login Refresh Reminder Banner ───────────────────────────── */
 #refresh-reminder-banner {
     position: fixed;

@@ -354,7 +354,7 @@
         const DAILY_FREE_CODES = {
             "2026-05-15": "BIGNIFS",
             "2026-05-16": "INSIDEOAU!",
-            "2026-05-17": "COACHPRINCE",
+            "2026-05-17": "PRINCE",
             "2026-05-18": "MKDESIGN",
             "2026-05-19": "LUCID",
             "2026-05-20": "WMMO",

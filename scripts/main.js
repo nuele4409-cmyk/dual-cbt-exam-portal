@@ -11987,195 +11987,128 @@
         // --- END OF BOUNCER ---
 
 
+        // ── START EXAM (fresh rewrite) ────────────────────────────────────
         async function authenticateAndStart() {
+            try {
+                var name    = (document.getElementById('cand-name')  || {}).value || '';
+                var regNum  = (document.getElementById('cand-reg')   || {}).value || '';
+                var code    = ((document.getElementById('cand-code') || {}).value || '').trim().toUpperCase();
+                var mode    = (document.getElementById('exam-mode')  || {}).value || 'mock';
+                name   = name.trim();
+                regNum = regNum.trim();
 
-            const name = document.getElementById('cand-name').value.trim();
-            const regNum = document.getElementById('cand-reg').value.trim();
+                if (!name) { alert('Please enter your Name!'); return; }
 
-            // ── Admin fast-path: skip all Supabase wait checks ───────────────
-            var _ADMIN_EMAIL = 'nuele4409@gmail.com';
-            var _isAdminUser = window._authUser && window._authUser.email &&
-                               window._authUser.email.toLowerCase() === _ADMIN_EMAIL;
+                // Admin fast-path — skip all cloud checks and code gate
+                var ADMIN_EMAIL  = 'nuele4409@gmail.com';
+                var isAdmin = !!(window._authUser &&
+                                 window._authUser.email &&
+                                 window._authUser.email.toLowerCase() === ADMIN_EMAIL);
 
-            // ── FEATURE 4: Anti-Cheat — block retakes for Mock mode ────────────
-            const mode_check = document.getElementById('exam-mode').value;
-            if (!_isAdminUser && mode_check === 'mock' && window.cloudCheckRetake) {
-                const idForCheck = localStorage.getItem("inside_oau_id") || regNum;
-                const existingResult = await window.cloudCheckRetake(idForCheck);
-                if (existingResult) {
-                    alert("You have already taken today's Mock Exam. Please check your 'Previous Works' to review your score.");
-                    return;
-                }
-            }
-
-            // ── Resume check — works for BOTH practice AND mock ───────────────
-            // Practice: instant, no code needed again
-            // Mock: skips code check if resuming (already validated when session started)
-            if (!_isAdminUser && name && window.cloudCheckResume) {
-                const session = await window.cloudCheckResume();
-                if (session && session.examData && Object.keys(session.examData).length > 0 && session.timeLeft > 0) {
-                    const savedMode = session.examMode || 'mock';
-                    const savedName = (session.studentDetails && session.studentDetails.name) || name;
-                    const minsLeft = Math.floor(session.timeLeft / 60);
-                    const wantsResume = confirm(
-                        'Resume ' + (savedMode === 'mock' ? 'Mock' : 'Practice') + ' Exam?' +
-                        '\n\nSaved session for "' + savedName + '" — ' + minsLeft + ' min remaining.' +
-                        '\n\nOK = Resume  |  Cancel = Start Fresh'
-                    );
-                    if (wantsResume) {
-                        // Restore full exam state into both window globals and local vars
-                        examData = window.examData = session.examData;
-                        userAnswers = window.userAnswers = session.userAnswers;
-                        currentSubject = window.currentSubject = session.currentSubject || Object.keys(session.examData)[0];
-                        currentQIndex = window.currentQIndex = session.currentQIndex || 0;
-                        timeLeft = window.timeLeft = session.timeLeft;
-                        studentDetails = window.studentDetails = session.studentDetails || { name, regNum };
-                        document.getElementById('disp-name').innerText = savedName;
-                        document.getElementById('exam-mode').value = savedMode;
-                        document.getElementById('auth-gate').style.display = 'none';
-                        document.getElementById('community-card').style.display = 'none';
-                        var hc = document.getElementById('history-card');
-                        if (hc) hc.style.display = 'none';
-                        var _rhv = document.getElementById('utme-home-view');
-                        if (_rhv) _rhv.classList.add('hidden');
-                        var _rmp = document.getElementById('utme-mode-panel');
-                        if (_rmp) _rmp.classList.remove('active');
-                        document.getElementById('quiz-interface').style.display = 'block';
-                        startTimer();
-                        renderTabs(Object.keys(examData));
-                        loadQuestion();
-                        window.registerPresence && window.registerPresence();
+                // Code validation (non-admin mock only)
+                if (mode === 'mock' && !isAdmin) {
+                    var today = new Date().toISOString().split('T')[0];
+                    var officialCode = null;
+                    try {
+                        if (window._supabase) {
+                            var cr = await window._supabase
+                                .from('utme_daily_codes')
+                                .select('code').eq('code_date', today).maybeSingle();
+                            if (cr && cr.data && cr.data.code) officialCode = cr.data.code.toUpperCase();
+                        }
+                    } catch(e) {}
+                    if (!officialCode) {
+                        var vault = {
+                            "2026-04-05":"INSIDEOAU","2026-04-06":"BIG-NIFS",
+                            "2026-04-07":"MK-DESIGN","2026-04-08":"LUCID",
+                            "2026-04-09":"INSIDEOAU2026","2026-04-10":"COACH-PRINCE",
+                            "2026-04-11":"BIG-NIFS","2026-04-12":"MK-DESIGN",
+                            "2026-04-13":"LUCID","2026-04-14":"COACH-PRINCE",
+                            "2026-04-15":"BIG-NIFS"
+                        };
+                        officialCode = vault[today] || 'INSIDE-OAU-26';
+                    }
+                    if (code !== officialCode) {
+                        alert("❌ Invalid or Expired Access Code! Please join the 'Inside OAU!' channel for today's code.");
                         return;
-                    } else {
-                        // Start Fresh — wipe the saved session immediately
-                        window.cloudClearSession && window.cloudClearSession();
                     }
                 }
-            }
-            const code = document.getElementById('cand-code').value.trim().toUpperCase();
-            const mode = document.getElementById('exam-mode').value;
-            const electives = document.querySelectorAll('.utme-subject-chip.utme-selected:not(.utme-locked)');
 
-            // --- 🛑 SECURITY LOGIC ---
-            // Practice mode: free access, no code needed
-            // Mock mode: daily code required
-            if (mode === 'mock') {
-                // Admin users skip the code gate entirely
-                var _MOCK_ADMIN = 'nuele4409@gmail.com';
-                var _isAdmin = window._authUser && window._authUser.email &&
-                               window._authUser.email.toLowerCase() === _MOCK_ADMIN;
-                if (_isAdmin) {
-                    // admin — skip code validation
-                } else {
-                // Try Supabase daily code first, fall back to vault
-                let d = new Date();
-                let today = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0') + "-" + String(d.getDate()).padStart(2, '0');
-                let officialCode = null;
+                // Build subject list
+                var subjectKeys = ['english'];
+                document.querySelectorAll('.utme-subject-chip.utme-selected:not(.utme-locked)')
+                    .forEach(function(chip){ subjectKeys.push(chip.dataset.value.toLowerCase()); });
+
+                // Fetch Supabase questions (best-effort)
+                var sbBank = {};
                 try {
                     if (window._supabase) {
-                        var codeRes = await window._supabase.from('utme_daily_codes')
-                            .select('code').eq('code_date', today).maybeSingle();
-                        if (codeRes && codeRes.data && codeRes.data.code) {
-                            officialCode = codeRes.data.code.toUpperCase();
+                        var sbRes = await window._supabase
+                            .from('utme_questions')
+                            .select('subject,question,option_a,option_b,option_c,option_d,correct_answer,explanation,passage')
+                            .in('subject', subjectKeys);
+                        if (sbRes && sbRes.data) {
+                            var am = {A:0,B:1,C:2,D:3};
+                            sbRes.data.forEach(function(r){
+                                var s = r.subject.toLowerCase();
+                                if (!sbBank[s]) sbBank[s] = [];
+                                sbBank[s].push({
+                                    question: r.question,
+                                    options:  [r.option_a, r.option_b, r.option_c, r.option_d],
+                                    answer:   am[r.correct_answer] !== undefined ? am[r.correct_answer] : 0,
+                                    explanation: r.explanation || '',
+                                    passage: r.passage || null
+                                });
+                            });
                         }
                     }
                 } catch(e) {}
-                // Fall back to hardcoded vault if Supabase had nothing
-                if (!officialCode) {
-                    const codesVault = {
-                        "2026-04-05": "INSIDEOAU", "2026-04-06": "BIG-NIFS",
-                        "2026-04-07": "MK-DESIGN",  "2026-04-08": "LUCID",
-                        "2026-04-09": "INSIDEOAU2026", "2026-04-10": "COACH-PRINCE",
-                        "2026-04-11": "BIG-NIFS",  "2026-04-12": "MK-DESIGN",
-                        "2026-04-13": "LUCID",     "2026-04-14": "COACH-PRINCE",
-                        "2026-04-15": "BIG-NIFS",
-                    };
-                    officialCode = codesVault[today] || "INSIDE-OAU-26";
-                }
-                if (code !== officialCode) {
-                    alert("❌ Invalid or Expired Access Code! Please join the 'Inside OAU!' channel for today's code.");
-                    return;
-                }
-                } // end non-admin block
-            }
-            // Practice mode: bypass code check entirely — just needs a name
 
-            if (!name || !regNum) {
-                alert("Please enter your Name!");
-                return;
-            }
-            // --- END OF SECURITY LOGIC ---
-
-            let subjectKeys = ['english'];
-            electives.forEach(chip => subjectKeys.push(chip.dataset.value.toLowerCase()));
-
-            examData = {}; userAnswers = {};
-
-            // ── Fetch Supabase questions for selected subjects ────────────────
-            var _sbQBank = {};
-            try {
-                if (window._supabase) {
-                    var _sbRes = await window._supabase
-                        .from('utme_questions')
-                        .select('subject,question,option_a,option_b,option_c,option_d,correct_answer,explanation,passage')
-                        .in('subject', subjectKeys);
-                    if (_sbRes && _sbRes.data && _sbRes.data.length) {
-                        var _ansMap = { A:0, B:1, C:2, D:3 };
-                        _sbRes.data.forEach(function(row) {
-                            var subj = row.subject.toLowerCase();
-                            if (!_sbQBank[subj]) _sbQBank[subj] = [];
-                            _sbQBank[subj].push({
-                                question:    row.question,
-                                options:     [row.option_a, row.option_b, row.option_c, row.option_d],
-                                answer:      _ansMap[row.correct_answer] !== undefined ? _ansMap[row.correct_answer] : 0,
-                                explanation: row.explanation || '',
-                                passage:     row.passage || null
-                            });
-                        });
+                // Build examData
+                examData = {}; userAnswers = {};
+                subjectKeys.forEach(function(key){
+                    var limit;
+                    if (mode === 'mock') {
+                        limit = (key === 'english' ? 60 : 40);
+                    } else {
+                        var el = document.getElementById('count-' + key);
+                        limit = el ? (parseInt(el.value) || 10) : 10;
                     }
-                }
-            } catch(_sbErr) { console.warn('Supabase Q fetch failed, using local only:', _sbErr); }
+                    var merged = (sbBank[key] || []).concat(quizData[key] || []);
+                    examData[key]    = pickRandomQuestions(merged, limit);
+                    userAnswers[key] = {};
+                });
 
-            subjectKeys.forEach(key => {
-                let limit;
+                // Timer
                 if (mode === 'mock') {
-                    limit = (key === 'english' ? 60 : 40);
+                    timeLeft = 7200; // 2 hours
                 } else {
-                    limit = parseInt(document.getElementById(`count-${key}`).value) || 10;
+                    var ct = document.getElementById('custom-time');
+                    timeLeft = (ct ? (parseInt(ct.value) || 60) : 60) * 60;
                 }
-                // Merge Supabase questions first, then hardcoded fallback
-                var _merged = (_sbQBank[key] || []).concat(quizData[key] || []);
-                examData[key] = pickRandomQuestions(_merged, limit);
-                userAnswers[key] = {};
-            });
 
-            // Set Timer
-            if (mode === 'mock') {
-                timeLeft = 7200; // 2 Hours
-            } else {
-                let mins = parseInt(document.getElementById('custom-time').value) || 60;
-                timeLeft = mins * 60;
+                studentDetails = { name: name, regNum: regNum, subjectString: subjectKeys.join(', ').toUpperCase() };
+
+                // Show quiz interface
+                document.getElementById('disp-name').innerText = name;
+                var ag = document.getElementById('auth-gate');       if (ag) ag.style.display = 'none';
+                var cc = document.getElementById('community-card');  if (cc) cc.style.display = 'none';
+                var hv = document.getElementById('utme-home-view');  if (hv) hv.classList.add('hidden');
+                var mp = document.getElementById('utme-mode-panel'); if (mp) mp.classList.remove('active');
+                document.getElementById('quiz-interface').style.display = 'block';
+
+                currentSubject = subjectKeys[0];
+                startTimer();
+                renderTabs(subjectKeys);
+                loadQuestion();
+
+                if (window.registerPresence) window.registerPresence();
+                if (window.initLeaderboard)  window.initLeaderboard();
+
+            } catch(err) {
+                console.error('[authenticateAndStart] error:', err);
+                alert('Something went wrong starting the exam. Please refresh and try again.');
             }
-
-            studentDetails = { name, regNum, subjectString: subjectKeys.join(", ").toUpperCase() };
-
-            document.getElementById('disp-name').innerText = name;
-            document.getElementById('auth-gate').style.display = 'none';
-            document.getElementById('community-card').style.display = 'none';
-            var _homeV = document.getElementById('utme-home-view');
-            if (_homeV) _homeV.classList.add('hidden');
-            var _modeP = document.getElementById('utme-mode-panel');
-            if (_modeP) _modeP.classList.remove('active');
-            document.getElementById('quiz-interface').style.display = 'block';
-
-            currentSubject = subjectKeys[0];
-            startTimer();
-            renderTabs(subjectKeys);
-            loadQuestion();
-
-            // ── Supabase: register presence + init leaderboard ─────────────────
-            if (window.registerPresence) window.registerPresence();
-            if (window.initLeaderboard) window.initLeaderboard();
         }
 
         function renderTabs(keys) {

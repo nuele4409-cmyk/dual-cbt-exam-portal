@@ -13157,6 +13157,27 @@
             }
         }
 
+
+        // ── Refresh-reminder banner (shown on every login) ────────────────
+        function _showRefreshBanner() {
+            var old = document.getElementById('refresh-reminder-banner');
+            if (old) old.remove();
+            var b = document.createElement('div');
+            b.id = 'refresh-reminder-banner';
+            b.innerHTML =
+                '<span class="rrb-text">🔄 <strong>Always refresh the app</strong> when you log in to get the latest updates &amp; questions!</span>' +
+                '<div class="rrb-actions">' +
+                  '<button id="rrb-refresh-btn" onclick="window.location.reload()">Refresh Now</button>' +
+                  '<button id="rrb-close-btn" title="Dismiss" onclick="var el=document.getElementById(&quot;refresh-reminder-banner&quot;);if(el)el.remove();">✕</button>' +
+                '</div>';
+            document.body.appendChild(b);
+            // Auto-dismiss after 20 s if not acted on
+            setTimeout(function () {
+                var el = document.getElementById('refresh-reminder-banner');
+                if (el) el.remove();
+            }, 20000);
+        }
+
         // ── On Auth Success ───────────────────────────────────────────────
         async function _onAuthSuccess(user) {
             if (!user) return;
@@ -13212,6 +13233,7 @@
                 .eq('id', user.id).then(function () { }).catch(function () { });
 
             showPortalSelector();
+            _showRefreshBanner();
         }
 
 

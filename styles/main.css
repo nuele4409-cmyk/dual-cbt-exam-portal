@@ -3704,3 +3704,61 @@
     transform: translateX(-50%) translateY(0);
 }
 /* ─────────────────────────────────────────────────────────── */
+
+/* ── Login Refresh Reminder Banner ───────────────────────────── */
+#refresh-reminder-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 999999;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: #1a1100;
+    padding: 11px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    box-shadow: 0 3px 14px rgba(0,0,0,0.25);
+    animation: refresh-banner-slide 0.35s ease;
+}
+@keyframes refresh-banner-slide {
+    from { transform: translateY(-100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+#refresh-reminder-banner .rrb-text { flex: 1; line-height: 1.4; }
+#refresh-reminder-banner .rrb-text strong { font-weight: 700; }
+#refresh-reminder-banner .rrb-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+#rrb-refresh-btn {
+    background: #1a1100;
+    color: #f59e0b;
+    border: none;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: opacity 0.18s;
+}
+#rrb-refresh-btn:hover { opacity: 0.82; }
+#rrb-close-btn {
+    background: rgba(0,0,0,0.15);
+    color: #1a1100;
+    border: none;
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+    transition: background 0.18s;
+    line-height: 1;
+}
+#rrb-close-btn:hover { background: rgba(0,0,0,0.28); }

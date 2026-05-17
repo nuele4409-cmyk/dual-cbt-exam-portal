@@ -13198,6 +13198,7 @@
                 if (el) el.remove();
                 document.body.classList.remove('has-refresh-banner');
             }
+            window._dismissRefreshBanner = _dismissBanner;
 
             b.innerHTML =
                 '<span class="rrb-text">🔄 <strong>Always refresh the app</strong> when you log in to get the latest updates &amp; questions!</span>' +
@@ -13794,6 +13795,7 @@
 
         // ── Enter UTME Portal ─────────────────────────────────────────────
         function enterUtmePortal() {
+            if (window._dismissRefreshBanner) window._dismissRefreshBanner();
             var _ps = document.getElementById('portal-selector');
             if (_ps) { _ps.classList.remove('visible'); _ps.style.display = ''; }
 
@@ -13833,6 +13835,7 @@
 
         // ── Enter Post-UTME Portal ────────────────────────────────────────
         function enterPostUtmePortal() {
+            if (window._dismissRefreshBanner) window._dismissRefreshBanner();
             var _ps2 = document.getElementById('portal-selector');
             if (_ps2) { _ps2.classList.remove('visible'); _ps2.style.display = ''; }
 

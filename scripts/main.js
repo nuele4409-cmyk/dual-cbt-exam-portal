@@ -12074,7 +12074,7 @@
                         var el = document.getElementById('count-' + key);
                         limit = el ? (parseInt(el.value) || 10) : 10;
                     }
-                    var merged = (sbBank[key] || []).concat((window.quizData && window.quizData[key]) || []);
+                    var merged = (sbBank[key] || []).concat((typeof quizData !== 'undefined' && quizData[key]) ? quizData[key] : []);
                     _newExamData[key] = (typeof pickRandomQuestions === 'function')
                         ? pickRandomQuestions(merged, limit)
                         : merged.slice(0, limit);

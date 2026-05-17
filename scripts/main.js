@@ -13188,6 +13188,9 @@
 
         // ── Refresh-reminder banner (shown on every login) ────────────────
         function _showRefreshBanner() {
+            // Only show while the portal selector is still on screen
+            var _ps = document.getElementById('portal-selector');
+            if (!_ps || !_ps.classList.contains('visible')) return;
             var old = document.getElementById('refresh-reminder-banner');
             if (old) old.remove();
             var b = document.createElement('div');

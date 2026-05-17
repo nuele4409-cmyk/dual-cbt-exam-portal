@@ -12127,7 +12127,7 @@
                     var _mp2 = document.getElementById('utme-mode-panel');
                     if (_mp2) _mp2.classList.add('active');
                 } catch(e2) {}
-                alert('Something went wrong starting the exam. Please try again.');
+                alert('Exam start error: ' + (err && err.message ? err.message : String(err)));
             }
         }
 

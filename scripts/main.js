@@ -12060,8 +12060,8 @@
                 let today = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0') + "-" + String(d.getDate()).padStart(2, '0');
                 let officialCode = null;
                 try {
-                    if (window._postSupabase) {
-                        var codeRes = await window._postSupabase.from('utme_daily_codes')
+                    if (window._supabase) {
+                        var codeRes = await window._supabase.from('utme_daily_codes')
                             .select('code').eq('code_date', today).maybeSingle();
                         if (codeRes && codeRes.data && codeRes.data.code) {
                             officialCode = codeRes.data.code.toUpperCase();
@@ -13302,7 +13302,7 @@
             msgEl.style.color = '#888';
             msgEl.textContent = 'Saving…';
             try {
-                var res = await window._postSupabase.from('utme_daily_codes')
+                var res = await window._supabase.from('utme_daily_codes')
                     .upsert({ code_date: dateVal, code: codeVal }, { onConflict: 'code_date' });
                 if (res.error) throw res.error;
                 msgEl.style.color = '#16a34a';
@@ -13316,10 +13316,10 @@
 
         async function utmeAdminLoadTodayCode() {
             var listEl = document.getElementById('utme-adm-codes-list');
-            if (!listEl || !window._postSupabase) return;
+            if (!listEl || !window._supabase) return;
             listEl.innerHTML = '<p style="color:var(--th-text-2);font-size:0.85rem;text-align:center;">Loading…</p>';
             try {
-                var res = await window._postSupabase.from('utme_daily_codes')
+                var res = await window._supabase.from('utme_daily_codes')
                     .select('code_date, code, created_at')
                     .order('code_date', { ascending: false })
                     .limit(10);

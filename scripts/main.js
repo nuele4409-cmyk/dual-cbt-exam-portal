@@ -13796,6 +13796,20 @@
         // Make sure it's reachable from inline onclick attrs
         window.showPortalSelector = showPortalSelector;
 
+        // Hard-wire the ← Portal button via JS as well (belt-and-suspenders for desktop)
+        document.addEventListener('DOMContentLoaded', function() {
+            var _backBtn = document.querySelector('#utme-hero-bar .back-to-portal');
+            if (_backBtn) {
+                _backBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    showPortalSelector();
+                });
+                _backBtn.addEventListener('mousedown', function(e) {
+                    e.stopPropagation();
+                });
+            }
+        });
+
         // ── Enter UTME Portal ─────────────────────────────────────────────
         function enterUtmePortal() {
             if (window._dismissRefreshBanner) window._dismissRefreshBanner();

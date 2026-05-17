@@ -13832,8 +13832,9 @@
                                (user && user.email && user.email.toLowerCase() === _UTME_ADMIN_EMAIL.toLowerCase());
             if (_isUtmeAdmin) showUtmeAdminFab();
 
-            // Show the UTME screen
-            document.getElementById('utme-screen').style.display = 'block';
+            // Show the UTME screen and always scroll it to the top
+            var _us = document.getElementById('utme-screen');
+            if (_us) { _us.style.display = 'block'; _us.scrollTop = 0; }
         }
 
         // ── Enter Post-UTME Portal ────────────────────────────────────────

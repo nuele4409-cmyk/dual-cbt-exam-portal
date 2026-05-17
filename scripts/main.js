@@ -16876,6 +16876,13 @@
     var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 
     function showBanner() {
+        // Don't show if already dismissed this session
+        try { if (sessionStorage.getItem('pwa_dismissed')) return; } catch(e) {}
+        // Don't show if the portal selector or auth overlay is currently visible
+        var ps = document.getElementById('portal-selector');
+        if (ps && ps.classList.contains('visible')) return;
+        var auth = document.getElementById('auth-overlay');
+        if (auth && !auth.classList.contains('hidden')) return;
         var banner = document.getElementById('pwa-install-banner');
         if (banner) banner.style.display = 'flex';
     }
@@ -16934,8 +16941,8 @@
             } catch(e) {}
         }
 
-        // Show banner after 4 seconds on every platform
-        setTimeout(showBanner, 4000);
+        // Show banner after 12 seconds — user should be past portal selection by then
+        setTimeout(showBanner, 12000);
     });
 }());
 // PWA toast helper (used by install banner)

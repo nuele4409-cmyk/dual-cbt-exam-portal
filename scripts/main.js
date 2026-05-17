@@ -14473,15 +14473,21 @@
                 for (var i = 0; i < subjects.length; i++) {
                     var sub = subjects[i];
                     try {
+                        // Fetch a large pool then randomly pick questionsPerSubject
                         var res = await _postSupabase
                             .from('question_bank')
                             .select('id, question, option_a, option_b, option_c, option_d, correct_answer, explanation, passage')
                             .or('university.eq.' + university + ',university.eq.ALL')
                             .eq('subject', sub)
-                            .limit(questionsPerSubject);
+                            .limit(300);
                         if (res.data && res.data.length > 0) {
-                            var shuffled = res.data.sort(function () { return Math.random() - 0.5; });
-                            shuffled.forEach(function (q) {
+                            // Fisher-Yates shuffle for truly random selection
+                            var pool = res.data.slice();
+                            for (var k = pool.length - 1; k > 0; k--) {
+                                var r = Math.floor(Math.random() * (k + 1));
+                                var tmp = pool[k]; pool[k] = pool[r]; pool[r] = tmp;
+                            }
+                            pool.slice(0, questionsPerSubject).forEach(function (q) {
                                 allQuestions.push({
                                     subject: sub,
                                     question: q.question,

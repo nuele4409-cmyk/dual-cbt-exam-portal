@@ -6,7 +6,7 @@
 //    • Fallback: serve cached index.html when offline
 // ─────────────────────────────────────────────────────────────
 
-const CACHE = 'insideoau-cbt-v1';
+const CACHE = 'insideoau-cbt-v2';
 
 const PRECACHE = [
   '/',
@@ -72,14 +72,4 @@ self.addEventListener('fetch', event => {
           const networkFetch = fetch(req).then(response => {
             if (response && response.ok) {
               cache.put(req, response.clone());
-            }
-            return response;
-          }).catch(() => cached || caches.match('/index.html'));
-
-          // Return cache immediately, refresh in background
-          return cached || networkFetch;
-        })
-      )
-    );
-  }
-});
+     

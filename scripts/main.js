@@ -12064,8 +12064,8 @@
                     }
                 } catch(e) {}
 
-                // Build examData
-                examData = {}; userAnswers = {};
+                // ── Build examData (ALL data work before any UI change) ──────────
+                var _newExamData = {}, _newAnswers = {};
                 subjectKeys.forEach(function(key){
                     var limit;
                     if (mode === 'mock') {
@@ -12074,22 +12074,30 @@
                         var el = document.getElementById('count-' + key);
                         limit = el ? (parseInt(el.value) || 10) : 10;
                     }
-                    var merged = (sbBank[key] || []).concat(quizData[key] || []);
-                    examData[key]    = pickRandomQuestions(merged, limit);
-                    userAnswers[key] = {};
+                    var merged = (sbBank[key] || []).concat((window.quizData && window.quizData[key]) || []);
+                    _newExamData[key] = (typeof pickRandomQuestions === 'function')
+                        ? pickRandomQuestions(merged, limit)
+                        : merged.slice(0, limit);
+                    _newAnswers[key] = {};
                 });
 
-                // Timer
+                // Timer value
+                var _timeLeft;
                 if (mode === 'mock') {
-                    timeLeft = 7200; // 2 hours
+                    _timeLeft = 7200; // 2 hours
                 } else {
                     var ct = document.getElementById('custom-time');
-                    timeLeft = (ct ? (parseInt(ct.value) || 60) : 60) * 60;
+                    _timeLeft = (ct ? (parseInt(ct.value) || 60) : 60) * 60;
                 }
 
+                // ── All data ready — commit to globals and switch UI ──────────
+                examData       = _newExamData;
+                userAnswers    = _newAnswers;
+                timeLeft       = _timeLeft;
+                currentSubject = subjectKeys[0];
+                currentQIndex  = 0;
                 studentDetails = { name: name, regNum: regNum, subjectString: subjectKeys.join(', ').toUpperCase() };
 
-                // Show quiz interface
                 document.getElementById('disp-name').innerText = name;
                 var ag = document.getElementById('auth-gate');       if (ag) ag.style.display = 'none';
                 var cc = document.getElementById('community-card');  if (cc) cc.style.display = 'none';
@@ -12097,7 +12105,6 @@
                 var mp = document.getElementById('utme-mode-panel'); if (mp) mp.classList.remove('active');
                 document.getElementById('quiz-interface').style.display = 'block';
 
-                currentSubject = subjectKeys[0];
                 startTimer();
                 renderTabs(subjectKeys);
                 loadQuestion();
@@ -12107,7 +12114,20 @@
 
             } catch(err) {
                 console.error('[authenticateAndStart] error:', err);
-                alert('Something went wrong starting the exam. Please refresh and try again.');
+                // ── Roll back UI so user lands back on the form, not a broken screen ──
+                try {
+                    var _qi = document.getElementById('quiz-interface');
+                    if (_qi) _qi.style.display = 'none';
+                    var _hv2 = document.getElementById('utme-home-view');
+                    if (_hv2) _hv2.classList.remove('hidden');
+                    var _ag2 = document.getElementById('auth-gate');
+                    if (_ag2) _ag2.style.display = '';
+                    var _cc2 = document.getElementById('community-card');
+                    if (_cc2) _cc2.style.display = '';
+                    var _mp2 = document.getElementById('utme-mode-panel');
+                    if (_mp2) _mp2.classList.add('active');
+                } catch(e2) {}
+                alert('Something went wrong starting the exam. Please try again.');
             }
         }
 

@@ -12055,6 +12055,13 @@
             // Practice mode: free access, no code needed
             // Mock mode: daily code required
             if (mode === 'mock') {
+                // Admin users skip the code gate entirely
+                var _MOCK_ADMIN = 'nuele4409@gmail.com';
+                var _isAdmin = window._authUser && window._authUser.email &&
+                               window._authUser.email.toLowerCase() === _MOCK_ADMIN;
+                if (_isAdmin) {
+                    // admin — skip code validation
+                } else {
                 // Try Supabase daily code first, fall back to vault
                 let d = new Date();
                 let today = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0') + "-" + String(d.getDate()).padStart(2, '0');
@@ -12084,6 +12091,7 @@
                     alert("❌ Invalid or Expired Access Code! Please join the 'Inside OAU!' channel for today's code.");
                     return;
                 }
+                } // end non-admin block
             }
             // Practice mode: bypass code check entirely — just needs a name
 
@@ -12777,7 +12785,7 @@
         function openUtmeMockMode() {
             document.getElementById('exam-mode').value = 'mock';
             document.getElementById('utme-mode-title').textContent = '🎯 Mock Exam';
-            document.getElementById('utme-mode-badge').textContent = '180 Qs · 3 Hrs';
+            document.getElementById('utme-mode-badge').textContent = '180 Qs · 2 Hrs';
             document.getElementById('utme-mode-badge').style.background = 'rgba(var(--th-primary-rgb),0.12)';
             var codeGroup = document.getElementById('utme-code-group');
             if (codeGroup) codeGroup.style.display = 'block';

@@ -12074,7 +12074,9 @@
                         var el = document.getElementById('count-' + key);
                         limit = el ? (parseInt(el.value) || 10) : 10;
                     }
-                    var merged = (sbBank[key] || []).concat((typeof quizData !== 'undefined' && quizData[key]) ? quizData[key] : []);
+                    var _localQs = (typeof quizData !== 'undefined' && Array.isArray(quizData[key])) ? quizData[key] : [];
+                    var merged = (sbBank[key] || []).concat(_localQs);
+                    console.log('[exam] subject=' + key + ' sbBank=' + (sbBank[key]||[]).length + ' local=' + _localQs.length + ' merged=' + merged.length);
                     _newExamData[key] = (typeof pickRandomQuestions === 'function')
                         ? pickRandomQuestions(merged, limit)
                         : merged.slice(0, limit);

@@ -421,6 +421,17 @@
                             universities.</p>
                         <div class="subject-list" id="subject-chip-list"></div>
                     </div>
+                    <!-- Practice mode: let student pick question count -->
+                    <div id="putme-q-count-row" style="display:none;align-items:center;gap:0.6rem;padding:0.6rem 1.2rem;background:rgba(0,86,179,0.06);border-top:1px solid #e0e8f5;">
+                        <label style="font-size:0.85rem;font-weight:600;color:#1a2742;white-space:nowrap;">Questions per subject:</label>
+                        <select id="putme-practice-q-count" style="border:1px solid #c0cfe8;border-radius:8px;padding:0.3rem 0.6rem;font-size:0.85rem;background:#fff;color:#1a2742;">
+                            <option value="10">10</option>
+                            <option value="15" selected>15</option>
+                            <option value="20">20</option>
+                            <option value="25">25</option>
+                            <option value="30">30</option>
+                        </select>
+                    </div>
                     <div class="subject-modal-footer">
                         <div class="subject-count">Selected: <span id="subject-count-num">1</span>/4</div>
                         <button class="start-exam-btn" id="start-exam-btn" onclick="confirmSubjectsAndStart()"
@@ -718,6 +729,16 @@
                                         <option value="UNILAG">UNILAG</option>
                                         <option value="UI">UI</option>
                                         <option value="UNILORIN">UNILORIN</option>
+                                    </select>
+                                </div>
+                                <div class="admin-field">
+                                    <label>Questions per Subject</label>
+                                    <select id="adm-questions">
+                                        <option value="10">10 questions</option>
+                                        <option value="20" selected>20 questions</option>
+                                        <option value="30">30 questions</option>
+                                        <option value="40">40 questions</option>
+                                        <option value="50">50 questions</option>
                                     </select>
                                 </div>
                                 <div class="admin-field">

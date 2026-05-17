@@ -14348,6 +14348,9 @@
             updateSubjectCount();
             var title = document.getElementById('subject-modal-title');
             if (title) title.textContent = (mode === 'mock' ? '🎯 Mock Exam' : '📝 Practice') + ' — Select 4 Subjects';
+            // Show question-count picker only in practice mode
+            var _qRow = document.getElementById('putme-q-count-row');
+            if (_qRow) _qRow.style.display = (mode === 'practice') ? 'flex' : 'none';
             document.getElementById('subject-modal').classList.add('open');
         }
 
@@ -14421,6 +14424,9 @@
 
             // Capture mode BEFORE closeSubjectModal() nulls _pendingExamMode
             var _launchMode = _pendingExamMode || 'practice';
+            // Store practice question count chosen by student
+            var _pqEl = document.getElementById('putme-practice-q-count');
+            _putme.practiceQCount = (_pqEl && _launchMode === 'practice') ? (parseInt(_pqEl.value) || 15) : 15;
             closeSubjectModal();
 
             // Save subjects to profile
@@ -14437,9 +14443,10 @@
             if (_launchMode === 'mock' && _putme._pendingMockId) {
                 _putme.mockEventId    = _putme._pendingMockId;
                 _putme.mockTitle      = _putme._pendingMockTitle || 'Mock Event';
-                _putme.customDuration = (_putme._pendingMockDuration || 120) * 60;
-                _putme.mode           = 'mock';
-                _putme._pendingMockId = null;
+                _putme.customDuration      = (_putme._pendingMockDuration  || 120) * 60;
+                _putme.questionsPerSubject = _putme._pendingMockQuestions || 20;
+                _putme.mode               = 'mock';
+                _putme._pendingMockId     = null;
                 // Durable window-level copies so the event ID/title survive any _putme mutation
                 window.currentEventId    = _putme.mockEventId;
                 window.currentEventTitle = _putme.mockTitle;
@@ -14466,7 +14473,10 @@
             document.getElementById('putme-num-grid').innerHTML = '';
 
             // Fetch questions from Supabase
-            var questionsPerSubject = (mode === 'mock') ? 10 : 15;
+            // mock: admin-set per scheduled mock (or 20 default); practice: student-chosen count
+            var questionsPerSubject = (mode === 'mock')
+                ? (_putme.questionsPerSubject || 20)
+                : (_putme.practiceQCount    || 15);
             var allQuestions = [];
 
             if (_postSupabase) {
@@ -15780,7 +15790,7 @@
                         var joinBtn = document.createElement('button');
                         joinBtn.className = 'mock-join-btn'; joinBtn.textContent = 'Join Now \u2192';
                         joinBtn.style.marginTop = '6px';
-                        joinBtn.onclick = (function(i){ return function(){ var mx=window._liveMocks[i]; joinMockExam(mx.id,mx.title||'Mock Event',mx.duration_minutes); }; })(idx);
+                        joinBtn.onclick = (function(i){ return function(){ var mx=window._liveMocks[i]; joinMockExam(mx.id,mx.title||'Mock Event',mx.duration_minutes, mx.questions_per_subject||20); }; })(idx);
                         liveWrap.appendChild(joinBtn);
                     }
                     right.appendChild(liveWrap);
@@ -15806,7 +15816,7 @@
             });
         }
 
-        function joinMockExam(mockId, mockTitle, durationMin) {
+        function joinMockExam(mockId, mockTitle, durationMin, questionsPerSub) {
             // Hard guard: prevent re-entry if student already submitted this mock
             if (window._takenMockIds && window._takenMockIds[mockId]) {
                 if (confirm('You have already submitted this mock exam.\nWould you like to view the leaderboard?')) {
@@ -15816,17 +15826,19 @@
             }
             if (!_putme.subjects || _putme.subjects.length < 4) {
                 // Save mock details so confirmSubjectsAndStart can apply them after subject selection
-                _putme._pendingMockId       = mockId;
-                _putme._pendingMockTitle    = mockTitle;
-                _putme._pendingMockDuration = durationMin;
+                _putme._pendingMockId        = mockId;
+                _putme._pendingMockTitle     = mockTitle;
+                _putme._pendingMockDuration  = durationMin;
+                _putme._pendingMockQuestions = questionsPerSub || 20;
                 openSubjectModal('mock');
                 return;
             }
             // Subjects already set — wire mock metadata then launch directly
-            _putme.mockEventId    = mockId;
-            _putme.mockTitle      = mockTitle;
-            _putme.mode           = 'mock';
-            _putme.customDuration = durationMin * 60;
+            _putme.mockEventId         = mockId;
+            _putme.mockTitle           = mockTitle;
+            _putme.mode                = 'mock';
+            _putme.customDuration      = durationMin * 60;
+            _putme.questionsPerSubject = questionsPerSub || 20;
             // Durable window-level copies so the event ID/title survive any _putme mutation
             window.currentEventId    = mockId;
             window.currentEventTitle = mockTitle;
@@ -15951,7 +15963,8 @@
             if (!_postSupabase) { showAdminMsg('Database not connected.','#c00'); return; }
             showAdminMsg('Scheduling\u2026','#555');
             try {
-                var res = await _postSupabase.from('scheduled_mocks').insert({ title:title, scheduled_at:new Date(dt).toISOString(), duration_minutes:duration, university:uni, description:desc });
+                var qps = parseInt(document.getElementById('adm-questions').value||'20',10) || 20;
+                var res = await _postSupabase.from('scheduled_mocks').insert({ title:title, scheduled_at:new Date(dt).toISOString(), duration_minutes:duration, university:uni, description:desc, questions_per_subject:qps });
                 if (res.error) { showAdminMsg('Error: '+res.error.message,'#c00'); return; }
                 showAdminMsg('\u2705 Mock scheduled!','#28a745');
                 document.getElementById('adm-title').value=''; document.getElementById('adm-datetime').value=''; document.getElementById('adm-desc').value='';

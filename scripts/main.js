@@ -13809,6 +13809,14 @@
         // Make sure it's reachable from inline onclick attrs
         window.showPortalSelector = showPortalSelector;
 
+        // ── Expose UTME functions called via inline onclick ──────────────
+        window.authenticateAndStart = authenticateAndStart;
+        window.openUtmeMockMode     = openUtmeMockMode;
+        window.openUtmePracticeMode = openUtmePracticeMode;
+        window.closeUtmeModePanel   = closeUtmeModePanel;
+        window.utmeToggleSubject    = utmeToggleSubject;
+        window.showUtmeHome         = showUtmeHome;
+
         // Hard-wire the ← Portal button via JS as well (belt-and-suspenders for desktop)
         document.addEventListener('DOMContentLoaded', function() {
             var _backBtn = document.querySelector('#utme-hero-bar .back-to-portal');

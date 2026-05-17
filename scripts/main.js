@@ -16916,8 +16916,22 @@
             } catch(e) {}
         }
 
-        // Show banner after 12 seconds — user should be past portal selection by then
-        setTimeout(showBanner, 12000);
+        // Show banner — retry every 8 s until it successfully displays (up to 10 attempts)
+        var _bannerTries = 0;
+        function _tryShowBanner() {
+            _bannerTries++;
+            try { if (sessionStorage.getItem('pwa_dismissed')) return; } catch(e) {}
+            var _ps   = document.getElementById('portal-selector');
+            var _auth = document.getElementById('auth-overlay');
+            var _onPortal = _ps   && _ps.classList.contains('visible');
+            var _onAuth   = _auth && !_auth.classList.contains('hidden');
+            if (!_onPortal && !_onAuth) {
+                showBanner();   // conditions met — show it
+            } else if (_bannerTries < 10) {
+                setTimeout(_tryShowBanner, 8000);  // still gating screen visible, retry
+            }
+        }
+        setTimeout(_tryShowBanner, 10000);  // first attempt at 10 s
     });
 }());
 // PWA toast helper (used by install banner)

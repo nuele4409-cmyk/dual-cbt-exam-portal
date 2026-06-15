@@ -13230,7 +13230,7 @@
                             id: user.id, email: user.email, student_id: sid,
                             full_name: name, has_post_utme_access: false
                         },
-                        { onConflict: 'id' }
+                        { onConflict: 'id', ignoreDuplicates: true }
                     ).select().maybeSingle()
                         .then(function (res) {
                             clearTimeout(tid2);
@@ -15764,8 +15764,9 @@
                 card.className = 'mock-event-card ' + status;
                 var info = document.createElement('div');
                 info.className = 'mock-event-info';
+                var _qps = mock.questions_per_subject || 20;
                 info.innerHTML = '<div class="mock-event-title">' + (mock.title||'Mock Exam') + '</div>' +
-                    '<div class="mock-event-meta">' + uniTag + ' \u2022 ' + dateStr + ' \u2022 ' + mock.duration_minutes + ' min</div>' +
+                    '<div class="mock-event-meta">' + uniTag + ' \u2022 ' + dateStr + ' \u2022 ' + mock.duration_minutes + ' min \u2022 ' + _qps + ' Qs/subject</div>' +
                     (mock.description ? '<div class="mock-event-meta" style="margin-top:3px;font-style:italic;">' + mock.description + '</div>' : '');
                 var right = document.createElement('div');
                 right.className = 'mock-event-right';
@@ -15919,9 +15920,10 @@
             var pane = document.getElementById('adm-tab-' + tab);
             if (pane) pane.classList.add('active');
             if (btn) btn.classList.add('active');
-            if (tab === 'revenue') adminLoadRevenue();
-            if (tab === 'notes')   adminLoadNotes();
-            if (tab === 'codes')   adminLoadUnusedCodes();
+            if (tab === 'revenue')  adminLoadRevenue();
+            if (tab === 'notes')    adminLoadNotes();
+            if (tab === 'codes')    adminLoadUnusedCodes();
+            if (tab === 'students') adminLoadStudents('');
         }
 
         async function adminLoadMocks() {
@@ -15940,8 +15942,9 @@
                                   ' ' + startDate.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
                     var row = document.createElement('div'); row.className = 'admin-mock-row';
                     var info = document.createElement('div'); info.style.flex = '1';
+                    var qCount = m.questions_per_subject ? (m.questions_per_subject + ' Qs/subject') : '20 Qs/subject (default)';
                     info.innerHTML = '<div style="font-weight:700;color:#1a2742;">'+(m.title||'Untitled')+'</div>' +
-                        '<div style="font-size:0.78rem;color:#888;">'+dateStr+' \u2022 '+m.duration_minutes+'min \u2022 '+(m.university||'All Unis')+'</div>';
+                        '<div style="font-size:0.78rem;color:#888;">'+dateStr+' \u2022 '+m.duration_minutes+'min \u2022 '+(m.university||'All Unis')+' \u2022 '+qCount+'</div>';
                     var badge = document.createElement('span'); badge.className='admin-mock-status '+status; badge.textContent=status.toUpperCase();
                     var viewBtn = document.createElement('button'); viewBtn.className='admin-view-btn'; viewBtn.textContent='Results';
                     viewBtn.onclick=(function(idx){return function(){var mx=window._adminMocks[idx];openMockLeaderboard(mx.id,mx.title||'Mock Event');};})(i);
@@ -16234,6 +16237,126 @@
                     '</div>';
                 }).join('');
             } catch(e) { console.warn('Revenue load failed:', e.message); }
+        }
+
+        // ── Admin: Student Management ─────────────────────────────────────
+        async function adminLoadStudents(search) {
+            var el = document.getElementById('adm-students-list');
+            if (!el || !_postSupabase) return;
+            el.innerHTML = '<p style="color:#888;text-align:center;">Loading…</p>';
+            try {
+                var q = _postSupabase
+                    .from('profiles')
+                    .select('id, full_name, email, student_id, has_post_utme_access, created_at')
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+                if (search && search.trim()) {
+                    var s = search.trim();
+                    q = q.or('full_name.ilike.%'+s+'%,email.ilike.%'+s+'%,student_id.ilike.%'+s+'%');
+                }
+                var res = await q;
+                var rows = res.data || [];
+                if (rows.length === 0) {
+                    el.innerHTML = '<p style="color:#888;text-align:center;">No students found.</p>';
+                    return;
+                }
+                el.innerHTML = '';
+                rows.forEach(function(stu) {
+                    var date = stu.created_at
+                        ? new Date(stu.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })
+                        : '—';
+                    var row = document.createElement('div');
+                    row.className = 'admin-mock-row';
+                    row.style.cssText = 'flex-wrap:wrap;gap:6px;align-items:center;';
+
+                    var info = document.createElement('div');
+                    info.style.flex = '1';
+                    info.innerHTML =
+                        '<div style="font-weight:700;color:#1a2742;">' + (stu.full_name || '—') + '</div>' +
+                        '<div style="font-size:0.78rem;color:#888;">' +
+                            (stu.email || '—') + ' &bull; ' + (stu.student_id || '—') + ' &bull; ' + date +
+                        '</div>';
+
+                    var badge = document.createElement('span');
+                    badge.className = 'admin-mock-status ' + (stu.has_post_utme_access ? 'live' : 'ended');
+                    badge.textContent = stu.has_post_utme_access ? 'PREMIUM' : 'FREE';
+
+                    var accessBtn = document.createElement('button');
+                    accessBtn.className = 'admin-view-btn';
+                    accessBtn.style.background = stu.has_post_utme_access ? '#b91c1c' : '#16a34a';
+                    accessBtn.textContent = stu.has_post_utme_access ? 'Revoke' : 'Grant';
+                    (function(uid, cur, btn, bdg) {
+                        btn.onclick = function() { adminToggleStudentAccess(uid, cur, btn, bdg); };
+                    })(stu.id, stu.has_post_utme_access, accessBtn, badge);
+
+                    var pwBtn = document.createElement('button');
+                    pwBtn.className = 'admin-view-btn';
+                    pwBtn.style.background = '#312e81';
+                    pwBtn.textContent = '🔑 Pwd';
+                    (function(em) { pwBtn.onclick = function() { adminOpenPwModal(em); }; })(stu.email || '');
+
+                    row.appendChild(info);
+                    row.appendChild(badge);
+                    row.appendChild(accessBtn);
+                    row.appendChild(pwBtn);
+                    el.appendChild(row);
+                });
+            } catch(e) {
+                el.innerHTML = '<p style="color:#c00;text-align:center;">Failed to load: ' + e.message + '</p>';
+            }
+        }
+
+        async function adminToggleStudentAccess(userId, currentAccess, btn, badge) {
+            var newAccess = !currentAccess;
+            var prevText = btn.textContent;
+            btn.textContent = '…';
+            try {
+                var res = await _postSupabase.rpc('admin_set_access', { target_id: userId, new_access: newAccess });
+                if (res.error) throw new Error(res.error.message);
+                badge.className = 'admin-mock-status ' + (newAccess ? 'live' : 'ended');
+                badge.textContent = newAccess ? 'PREMIUM' : 'FREE';
+                btn.style.background = newAccess ? '#b91c1c' : '#16a34a';
+                btn.textContent = newAccess ? 'Revoke' : 'Grant';
+                btn.onclick = function() { adminToggleStudentAccess(userId, newAccess, btn, badge); };
+            } catch(e) {
+                btn.textContent = prevText;
+                alert('Failed: ' + e.message + '\n\nMake sure you have run supabase_admin_rpc.sql in your Supabase SQL editor.');
+            }
+        }
+
+        function adminOpenPwModal(email) {
+            document.getElementById('cbt-pw-email').value = email || '';
+            document.getElementById('cbt-pw-password').value = '';
+            var msgEl = document.getElementById('cbt-pw-msg');
+            msgEl.style.display = 'none'; msgEl.textContent = '';
+            document.getElementById('cbt-pw-modal').style.display = 'flex';
+            setTimeout(function() { document.getElementById('cbt-pw-password').focus(); }, 100);
+        }
+
+        async function adminSaveStudentPassword() {
+            var email    = (document.getElementById('cbt-pw-email').value || '').trim();
+            var password = document.getElementById('cbt-pw-password').value;
+            var msgEl    = document.getElementById('cbt-pw-msg');
+            msgEl.style.display = 'block';
+            if (!email) { msgEl.style.color='#c00'; msgEl.textContent = 'Please enter the student email.'; return; }
+            if (!password || password.length < 6) { msgEl.style.color='#c00'; msgEl.textContent = 'Password must be at least 6 characters.'; return; }
+            msgEl.style.color = '#555'; msgEl.textContent = 'Saving…';
+            try {
+                var sessionData = await _postSupabase.auth.getSession();
+                var token = sessionData && sessionData.data && sessionData.data.session && sessionData.data.session.access_token;
+                if (!token) { msgEl.style.color='#c00'; msgEl.textContent = 'Not signed in.'; return; }
+                var resp = await fetch('/api/set-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ email: email, password: password })
+                });
+                var data = await resp.json().catch(function(){ return {}; });
+                if (!resp.ok) { msgEl.style.color='#c00'; msgEl.textContent = 'Error: ' + (data.error || resp.statusText); return; }
+                msgEl.style.color = '#16a34a'; msgEl.textContent = '✅ Password updated!';
+                setTimeout(function() { document.getElementById('cbt-pw-modal').style.display = 'none'; }, 1500);
+            } catch(e) {
+                msgEl.style.color = '#c00'; msgEl.textContent = 'Failed: ' + e.message;
+            }
         }
 
         // ── backToPutmeHome — hides all sub-screens, restores dashboard ──

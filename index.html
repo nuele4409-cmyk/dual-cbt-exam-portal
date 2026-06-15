@@ -700,6 +700,7 @@
                     <button class="admin-tab" onclick="adminSwitchTab('codes',this)">🔑 Access Codes</button>
                     <button class="admin-tab" onclick="adminSwitchTab('notes',this)">📚 Study Notes</button>
                     <button class="admin-tab" onclick="adminSwitchTab('revenue',this)">📊 Revenue</button>
+                    <button class="admin-tab" onclick="adminSwitchTab('students',this)">👥 Students</button>
                 </div>
 
                 <div class="admin-body">
@@ -970,7 +971,42 @@
                         </div>
                     </div>
 
+                    <!-- ── TAB: Students ─────────────────────────── -->
+                    <div class="admin-tab-pane" id="adm-tab-students">
+                        <div class="admin-section">
+                            <h3>👥 Student Management</h3>
+                            <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+                                <input type="text" id="adm-stu-search" placeholder="Search by name, email or ID…"
+                                    style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:0.88rem;min-width:180px;"
+                                    oninput="adminLoadStudents(this.value)">
+                                <button onclick="adminLoadStudents('')"
+                                    style="background:#374151;color:#fff;border:none;padding:9px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.82rem;">🔄 Refresh</button>
+                            </div>
+                            <div id="adm-students-list">
+                                <p style="color:#888;text-align:center;font-size:0.85rem;">Click Refresh to load students.</p>
+                            </div>
+                        </div>
+                    </div>
+
                 </div><!-- /admin-body -->
+            </div>
+
+            <!-- CBT Admin: Set Password Modal -->
+            <div id="cbt-pw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200000;align-items:center;justify-content:center;">
+                <div style="background:#fff;border-radius:14px;padding:28px 24px;max-width:380px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
+                    <h3 style="margin:0 0 16px;font-size:1.05rem;color:#1a2742;">🔑 Set New Password</h3>
+                    <input type="email" id="cbt-pw-email" placeholder="Student email"
+                        style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:0.92rem;box-sizing:border-box;margin-bottom:10px;">
+                    <input type="password" id="cbt-pw-password" placeholder="New password (min 6 chars)"
+                        style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:0.92rem;box-sizing:border-box;margin-bottom:14px;">
+                    <div id="cbt-pw-msg" style="font-size:0.84rem;text-align:center;margin-bottom:12px;display:none;"></div>
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="adminSaveStudentPassword()"
+                            style="flex:1;background:#312e81;color:#fff;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.92rem;">Save Password</button>
+                        <button onclick="document.getElementById('cbt-pw-modal').style.display='none'"
+                            style="flex:0 0 auto;background:#e5e7eb;color:#374151;border:none;padding:11px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.92rem;">Cancel</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Admin FAB -->

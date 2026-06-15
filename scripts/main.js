@@ -14928,7 +14928,7 @@
             }
             grid.innerHTML = subjects.map(function(s) {
                 var icon = _hub.subjectIcons[s] || '📖';
-                return '<div class="hub-subject-card" onclick="openHubSubject(\'' + s + '\')">' +
+                return '<div class="hub-subject-card" onclick="window.open(\'https://insideoaututorial.up.railway.app\',\'_blank\')" style="cursor:pointer;">' +
                     '<div style="font-size:2.5rem;">' + icon + '</div>' +
                     '<div style="font-weight:700;text-transform:capitalize;">' + s.replace('_',' ') + '</div></div>';
             }).join('');

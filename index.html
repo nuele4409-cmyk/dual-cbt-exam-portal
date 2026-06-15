@@ -314,8 +314,12 @@
                     <div class="putme-welcome-bar">
                         <div>
                             <div class="name" id="putme-name">Welcome!</div>
-                            <div style="font-size:0.8rem;color:rgba(255,255,255,0.7);margin-top:2px;"
-                                id="putme-uni-display">No university selected yet</div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
+                                <div style="font-size:0.8rem;color:rgba(255,255,255,0.7);"
+                                    id="putme-uni-display">No university selected yet</div>
+                                <button id="change-uni-btn" onclick="changeUniversity()"
+                                    style="display:none;font-size:0.7rem;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:20px;padding:2px 9px;cursor:pointer;font-family:inherit;">Change</button>
+                            </div>
                         </div>
                         <div class="sid" id="putme-sid">IOAU-—</div>
                     </div>

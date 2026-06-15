@@ -13209,7 +13209,7 @@
                 var tid = setTimeout(function () { resolve(null); }, 5000);
                 _postSupabase
                     .from('profiles')
-                    .select('student_id, full_name, has_post_utme_access, streak_count, badges, is_admin, last_active')
+                    .select('student_id, full_name, has_post_utme_access, streak_count, badges, is_admin, last_active, selected_university, post_utme_subjects')
                     .eq('id', user.id)
                     .maybeSingle()
                     .then(function (res) {
@@ -13954,7 +13954,7 @@
                     if (window._authUser) {
                         var { data: pData } = await _postSupabase
                             .from('profiles')
-                            .select('student_id, full_name, has_post_utme_access, streak_count, badges, is_admin, last_active')
+                            .select('student_id, full_name, has_post_utme_access, streak_count, badges, is_admin, last_active, selected_university, post_utme_subjects')
                             .eq('id', window._authUser.id)
                             .single();
                         if (pData) window._authProfile = pData;
@@ -14278,12 +14278,23 @@
             _NIGERIAN_UNIVERSITIES.forEach(function(u){ uniNames[u.code] = u.code + ' — ' + u.name; });
             var ud = document.getElementById('putme-uni-display');
             if (ud) ud.textContent = '🏫 ' + (uniNames[_selectedUni] || _selectedUni);
+            var cb = document.getElementById('change-uni-btn');
+            if (cb) cb.style.display = 'inline-block';
             if (msg) { msg.style.display = 'block'; setTimeout(function () { msg.style.display = 'none'; }, 2000); }
             if (btn) { btn.textContent = 'Save University'; }
             var uc = document.getElementById('uni-select-card');
             var ag = document.getElementById('putme-action-grid');
             if (uc) uc.style.display = 'none';
             if (ag) { ag.style.display = 'block'; loadGameStats(); }
+        }
+
+        function changeUniversity() {
+            var uc = document.getElementById('uni-select-card');
+            var ag = document.getElementById('putme-action-grid');
+            var cb = document.getElementById('change-uni-btn');
+            if (uc) uc.style.display = 'block';
+            if (ag) ag.style.display = 'none';
+            if (cb) cb.style.display = 'none';
         }
 
         function showPostUtmeHome() {
@@ -14317,6 +14328,8 @@
                 var ag = document.getElementById('putme-action-grid');
                 if (uc) uc.style.display = 'none';
                 if (ag) { ag.style.display = 'block'; loadGameStats(); }
+                var cb = document.getElementById('change-uni-btn');
+                if (cb) cb.style.display = 'inline-block';
             }
             var homeEl = document.getElementById('post-utme-home');
             if (homeEl) homeEl.style.display = 'block';

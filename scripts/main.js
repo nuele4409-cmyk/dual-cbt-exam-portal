@@ -13250,6 +13250,7 @@
                 .update({ last_login: new Date().toISOString() })
                 .eq('id', user.id).then(function () { }).catch(function () { });
 
+            try { sessionStorage.removeItem('pwa_dismissed'); } catch(e) {}
             showPortalSelector();
             _showRefreshBanner();
         }

@@ -14288,6 +14288,21 @@
             if (ag) { ag.style.display = 'block'; loadGameStats(); }
         }
 
+        function _updateSavedSubjectsBar(subjects) {
+            var bar = document.getElementById('saved-subjects-bar');
+            var lbl = document.getElementById('saved-subjects-label');
+            if (!bar || !lbl) return;
+            if (subjects && subjects.length >= 4) {
+                var names = subjects.map(function(s) {
+                    return s.charAt(0).toUpperCase() + s.slice(1).replace('_', ' ');
+                }).join(' · ');
+                lbl.textContent = names;
+                bar.style.display = 'flex';
+            } else {
+                bar.style.display = 'none';
+            }
+        }
+
         function changeUniversity() {
             var uc = document.getElementById('uni-select-card');
             var ag = document.getElementById('putme-action-grid');
@@ -14331,6 +14346,8 @@
                 var cb = document.getElementById('change-uni-btn');
                 if (cb) cb.style.display = 'inline-block';
             }
+            var savedSubs = (profile && profile.post_utme_subjects) || [];
+            _updateSavedSubjectsBar(savedSubs);
             var homeEl = document.getElementById('post-utme-home');
             if (homeEl) homeEl.style.display = 'block';
         }
@@ -14338,32 +14355,61 @@
         // Universities that use Aptitude Test as their mandatory first subject
         var _APTITUDE_TEST_UNIS = ['OAU', 'UNILAG', 'UNILORIN', 'UI'];
 
-        function openSubjectModal(mode) {
-            if (!_selectedUni) { alert('Please select and save your university first.'); return; }
-            _pendingExamMode = mode;
+        var _subjectChangeMode = false;
+
+        function _buildSubjectChips(savedSubjects) {
             var list = document.getElementById('subject-chip-list');
             if (!list) return;
-
-            // Swap locked subject: Aptitude Test for OAU/UNILAG/UNILORIN/UI, English for everyone else
             var useAptitude = _APTITUDE_TEST_UNIS.indexOf(_selectedUni) !== -1;
             var lockedSubject = useAptitude
                 ? { id: 'aptitude', label: 'Aptitude Test', locked: true }
                 : { id: 'english', label: 'Use of English', locked: true };
             var effectiveSubjects = [lockedSubject].concat(PUTME_SUBJECTS.slice(1));
-
-            list.innerHTML = effectiveSubjects.map(function (s) {
-                var cls = s.locked ? 'subject-chip locked' : 'subject-chip';
+            list.innerHTML = effectiveSubjects.map(function(s) {
+                var isSaved = !s.locked && savedSubjects.indexOf(s.id) !== -1;
+                var cls = s.locked ? 'subject-chip locked' : (isSaved ? 'subject-chip selected' : 'subject-chip');
+                var check = (s.locked || isSaved) ? '✓' : '';
                 var onclick = s.locked ? '' : 'onclick="toggleSubject(\'' + s.id + '\')"';
                 return '<div class="' + cls + '" id="chip-' + s.id + '" ' + onclick + '>' +
-                    '<div class="chip-check">' + (s.locked ? '✓' : '') + '</div>' +
-                    s.label + '</div>';
+                    '<div class="chip-check">' + check + '</div>' + s.label + '</div>';
             }).join('');
             updateSubjectCount();
+        }
+
+        function openSubjectModal(mode) {
+            if (!_selectedUni) { alert('Please select and save your university first.'); return; }
+            _pendingExamMode = mode;
+            var savedSubjects = (window._authProfile && window._authProfile.post_utme_subjects) || [];
+            _buildSubjectChips(savedSubjects);
+
+            // Skip the picker if subjects are already saved — jump straight into the exam
+            if (savedSubjects.length >= 4 && !_subjectChangeMode) {
+                confirmSubjectsAndStart();
+                return;
+            }
+            _subjectChangeMode = false;
+
             var title = document.getElementById('subject-modal-title');
+            var startBtn = document.getElementById('start-exam-btn');
             if (title) title.textContent = (mode === 'mock' ? '🎯 Mock Exam' : '📝 Practice') + ' — Select 4 Subjects';
-            // Show question-count picker only in practice mode
+            if (startBtn) startBtn.textContent = 'Start Exam →';
             var _qRow = document.getElementById('putme-q-count-row');
             if (_qRow) _qRow.style.display = (mode === 'practice') ? 'flex' : 'none';
+            document.getElementById('subject-modal').classList.add('open');
+        }
+
+        function openChangeSubjectsModal() {
+            if (!_selectedUni) { alert('Please select your university first.'); return; }
+            _subjectChangeMode = true;
+            _pendingExamMode = null;
+            var savedSubjects = (window._authProfile && window._authProfile.post_utme_subjects) || [];
+            _buildSubjectChips(savedSubjects);
+            var title = document.getElementById('subject-modal-title');
+            var startBtn = document.getElementById('start-exam-btn');
+            if (title) title.textContent = '✏️ Change Your Subjects';
+            if (startBtn) startBtn.textContent = 'Save Subjects ✓';
+            var _qRow = document.getElementById('putme-q-count-row');
+            if (_qRow) _qRow.style.display = 'none';
             document.getElementById('subject-modal').classList.add('open');
         }
 
@@ -14435,13 +14481,6 @@
             });
             if (subjects.length < 4) { alert('Please select exactly 4 subjects.'); return; }
 
-            // Capture mode BEFORE closeSubjectModal() nulls _pendingExamMode
-            var _launchMode = _pendingExamMode || 'practice';
-            // Store practice question count chosen by student
-            var _pqEl = document.getElementById('putme-practice-q-count');
-            _putme.practiceQCount = (_pqEl && _launchMode === 'practice') ? (parseInt(_pqEl.value) || 15) : 15;
-            closeSubjectModal();
-
             // Save subjects to profile
             if (_postSupabase && window._authUser) {
                 _postSupabase.from('profiles')
@@ -14450,6 +14489,21 @@
                     .then(function () { }).catch(function () { });
                 if (window._authProfile) window._authProfile.post_utme_subjects = subjects;
             }
+            _updateSavedSubjectsBar(subjects);
+
+            // In change mode — just save and return home, don't start an exam
+            if (_subjectChangeMode) {
+                _subjectChangeMode = false;
+                closeSubjectModal();
+                return;
+            }
+
+            // Capture mode BEFORE closeSubjectModal() nulls _pendingExamMode
+            var _launchMode = _pendingExamMode || 'practice';
+            // Store practice question count chosen by student
+            var _pqEl = document.getElementById('putme-practice-q-count');
+            _putme.practiceQCount = (_pqEl && _launchMode === 'practice') ? (parseInt(_pqEl.value) || 15) : 15;
+            closeSubjectModal();
 
             // If the user reached this modal via joinMockExam (subjects weren't set yet),
             // apply the saved mock metadata now before launching the exam

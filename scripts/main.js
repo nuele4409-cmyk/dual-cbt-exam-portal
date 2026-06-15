@@ -15991,6 +15991,7 @@
             if (tab === 'notes')    adminLoadNotes();
             if (tab === 'codes')    adminLoadUnusedCodes();
             if (tab === 'students') adminLoadStudents('');
+            if (tab === 'campaign') adminLoadCampaign();
         }
 
         async function adminLoadMocks() {
@@ -16423,6 +16424,115 @@
                 setTimeout(function() { document.getElementById('cbt-pw-modal').style.display = 'none'; }, 1500);
             } catch(e) {
                 msgEl.style.color = '#c00'; msgEl.textContent = 'Failed: ' + e.message;
+            }
+        }
+
+        // ── Admin: Email Campaign ─────────────────────────────────────────
+        async function adminLoadCampaign() {
+            var el = document.getElementById('adm-camp-stats');
+            if (!el || !_postSupabase) return;
+            try {
+                var freeQ    = await _postSupabase.from('profiles').select('*', { count: 'exact', head: true }).eq('has_post_utme_access', false);
+                var premiumQ = await _postSupabase.from('profiles').select('*', { count: 'exact', head: true }).eq('has_post_utme_access', true);
+                var freeCount    = freeQ.count    || 0;
+                var premiumCount = premiumQ.count || 0;
+                el.innerHTML =
+                    '<strong style="color:#6366f1;font-size:1.1em;">' + freeCount + '</strong> students on free plan &nbsp;·&nbsp; ' +
+                    '<strong style="color:#10b981;">' + premiumCount + '</strong> premium &nbsp;·&nbsp; ' +
+                    '<span style="color:#6b7280;">' + (freeCount + premiumCount) + ' total</span>';
+            } catch(e) {
+                el.textContent = 'Failed to load counts: ' + e.message;
+            }
+        }
+
+        function buildCampaignHtml(whatsapp) {
+            var waNum  = (whatsapp || '').replace(/\D/g, '');
+            var waLink = 'https://wa.me/' + waNum + '?text=' + encodeURIComponent('Hi, I want to activate my Post-UTME access for ₦1,000');
+            return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>' +
+                '<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">' +
+                '<div style="max-width:560px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">' +
+                  '<div style="background:#6366f1;padding:28px 32px;">' +
+                    '<h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">Inside OAU! 🎓</h1>' +
+                    '<p style="color:rgba(255,255,255,0.75);margin:6px 0 0;font-size:13px;">OAU Post-UTME Preparation</p>' +
+                  '</div>' +
+                  '<div style="padding:32px;">' +
+                    '<h2 style="color:#111;margin:0 0 14px;font-size:20px;">Hi {{params.name}},</h2>' +
+                    '<p style="color:#444;line-height:1.7;margin:0 0 10px;">You signed up on <strong>Inside OAU!</strong> but haven\'t unlocked your <strong>Post-UTME access</strong> yet.</p>' +
+                    '<p style="color:#444;line-height:1.7;margin:0 0 22px;">For a very limited time, we\'re dropping the price from <s style="color:#bbb;">₦7,000</s> to just:</p>' +
+                    '<div style="text-align:center;background:#f0f0ff;border-radius:10px;padding:24px;margin:0 0 24px;">' +
+                      '<div style="font-size:52px;font-weight:900;color:#6366f1;line-height:1;">₦1,000</div>' +
+                      '<div style="color:#888;font-size:14px;margin-top:8px;">One-time payment · Lifetime access</div>' +
+                    '</div>' +
+                    '<h3 style="color:#111;font-size:15px;margin:0 0 10px;">What you unlock:</h3>' +
+                    '<ul style="color:#444;line-height:2.1;padding-left:18px;margin:0 0 28px;">' +
+                      '<li>OAU Post-UTME past questions in CBT format</li>' +
+                      '<li>Unlimited practice sessions &amp; timed mock exams</li>' +
+                      '<li>Virtual classroom with AI Tutor</li>' +
+                      '<li>Full performance tracking &amp; analytics</li>' +
+                    '</ul>' +
+                    '<div style="text-align:center;margin-bottom:24px;">' +
+                      '<a href="' + waLink + '" style="background:#6366f1;color:#fff;text-decoration:none;padding:15px 36px;border-radius:8px;font-size:16px;font-weight:700;display:inline-block;">Activate Now — ₦1,000 →</a>' +
+                    '</div>' +
+                    '<p style="color:#888;font-size:13px;text-align:center;margin:0;">⏰ This price won\'t last. Tap the button above to pay on WhatsApp.</p>' +
+                  '</div>' +
+                  '<div style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;text-align:center;">' +
+                    '<p style="color:#ccc;font-size:11px;margin:0;">You received this because you registered on Inside OAU! · Reply STOP to unsubscribe.</p>' +
+                  '</div>' +
+                '</div></body></html>';
+        }
+
+        function adminPreviewCampaign() {
+            var whatsapp = (document.getElementById('adm-camp-whatsapp').value || '').trim();
+            if (!whatsapp) { alert('Enter your WhatsApp number first.'); return; }
+            var html     = buildCampaignHtml(whatsapp);
+            var preview  = document.getElementById('adm-camp-preview');
+            var iframe   = document.getElementById('adm-camp-iframe');
+            preview.style.display = 'block';
+            // Replace {{params.name}} with a demo name for preview
+            var previewHtml = html.replace(/\{\{params\.name\}\}/g, 'Oluwaseun');
+            iframe.srcdoc = previewHtml;
+        }
+
+        async function adminSendCampaign() {
+            var subject  = (document.getElementById('adm-camp-subject').value  || '').trim();
+            var whatsapp = (document.getElementById('adm-camp-whatsapp').value || '').trim();
+            var msgEl    = document.getElementById('adm-camp-msg');
+            var sendBtn  = document.getElementById('adm-camp-send-btn');
+
+            if (!subject)  { alert('Please enter an email subject.'); return; }
+            if (!whatsapp) { alert('Please enter your WhatsApp number.'); return; }
+
+            if (!confirm('Send this campaign to ALL free-tier students now?\n\nEach student will receive a personalised email. This cannot be undone.')) return;
+
+            var htmlContent = buildCampaignHtml(whatsapp);
+
+            msgEl.style.display = 'block';
+            msgEl.style.background = '#f0f0ff';
+            msgEl.style.color = '#374151';
+            msgEl.textContent = '⏳ Sending… please wait.';
+            sendBtn.disabled = true;
+
+            try {
+                var session = await _postSupabase.auth.getSession();
+                var token   = session && session.data && session.data.session && session.data.session.access_token;
+                if (!token) throw new Error('Not logged in.');
+
+                var res = await fetch('/api/send-campaign', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body:    JSON.stringify({ subject: subject, htmlContent: htmlContent }),
+                });
+                var data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Unknown error.');
+
+                msgEl.style.background = '#d1fae5';
+                msgEl.style.color      = '#065f46';
+                msgEl.textContent      = '✅ Campaign sent to ' + data.sent + ' students!';
+            } catch(e) {
+                msgEl.style.background = '#fee2e2';
+                msgEl.style.color      = '#991b1b';
+                msgEl.textContent      = '❌ ' + e.message;
+                sendBtn.disabled = false;
             }
         }
 

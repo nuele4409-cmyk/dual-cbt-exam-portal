@@ -102,23 +102,31 @@ module.exports = async function handler(req, res) {
         res.status(400).json({ error: 'subject and htmlContent are required.' }); return;
     }
 
-    // ── 3. Load free-tier students from Supabase ───────────────────────────
-    var freeRes = await supaFetch(
-        '/rest/v1/profiles?has_post_utme_access=eq.false&select=email,full_name',
-        'GET', null
-    );
-    if (!Array.isArray(freeRes.body)) {
-        res.status(500).json({ error: 'Failed to query student list.' }); return;
-    }
-    var students = freeRes.body.filter(function (s) { return s.email; });
-    if (!students.length) {
-        res.status(200).json({ sent: 0, message: 'No free-tier students with email addresses found.' });
-        return;
+    // ── 3. Build recipient list ────────────────────────────────────────────
+    var testEmail = String(body.testEmail || '').trim().toLowerCase();
+    var students;
+
+    if (testEmail) {
+        // Test mode — send only to the specified address
+        students = [{ email: testEmail, full_name: 'Test User' }];
+    } else {
+        var freeRes = await supaFetch(
+            '/rest/v1/profiles?has_post_utme_access=eq.false&select=email,full_name',
+            'GET', null
+        );
+        if (!Array.isArray(freeRes.body)) {
+            res.status(500).json({ error: 'Failed to query student list.' }); return;
+        }
+        students = freeRes.body.filter(function (s) { return s.email; });
+        if (!students.length) {
+            res.status(200).json({ sent: 0, message: 'No free-tier students with email addresses found.' });
+            return;
+        }
     }
 
     // ── 4. Build Brevo messageVersions (one per student = private delivery) ─
     var messageVersions = students.map(function (s) {
-        var firstName = (s.full_name || 'Student').split(' ')[0];
+        var firstName = (s.full_name || 'Test User').split(' ')[0];
         return {
             to:     [{ email: s.email, name: s.full_name || 'Student' }],
             params: { name: firstName },

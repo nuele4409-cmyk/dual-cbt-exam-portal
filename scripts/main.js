@@ -16466,6 +16466,43 @@
             '</div></body></html>';
         }
 
+        async function adminSendTestEmail() {
+            var testEmail = (document.getElementById('adm-camp-test-email').value || '').trim();
+            var subject   = (document.getElementById('adm-camp-subject').value || '').trim();
+            var whatsapp  = (document.getElementById('adm-camp-whatsapp').value || '').trim();
+            var msgEl     = document.getElementById('adm-camp-msg');
+            var testBtn   = document.getElementById('adm-camp-test-btn');
+            if (!testEmail) { alert('Enter a test email address.'); return; }
+            if (!subject)   { alert('Enter a subject line.'); return; }
+            var htmlContent = buildCampaignHtml(whatsapp);
+            msgEl.style.display = 'block';
+            msgEl.style.background = '#f0f0ff';
+            msgEl.style.color = '#374151';
+            msgEl.textContent = '⏳ Sending test…';
+            testBtn.disabled = true;
+            try {
+                var session = await _postSupabase.auth.getSession();
+                var token   = session && session.data && session.data.session && session.data.session.access_token;
+                if (!token) throw new Error('Not logged in.');
+                var res  = await fetch('/api/send-campaign', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body:    JSON.stringify({ subject: subject, htmlContent: htmlContent, testEmail: testEmail }),
+                });
+                var data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Unknown error.');
+                msgEl.style.background = '#d1fae5';
+                msgEl.style.color      = '#065f46';
+                msgEl.textContent      = '✅ Test email sent to ' + testEmail + ' — check the inbox!';
+            } catch(e) {
+                msgEl.style.background = '#fee2e2';
+                msgEl.style.color      = '#991b1b';
+                msgEl.textContent      = '❌ ' + e.message;
+            } finally {
+                testBtn.disabled = false;
+            }
+        }
+
         function adminPreviewCampaign() {
             var whatsapp = (document.getElementById('adm-camp-whatsapp').value || '').trim();
             if (!whatsapp) { alert('Enter your WhatsApp number first.'); return; }

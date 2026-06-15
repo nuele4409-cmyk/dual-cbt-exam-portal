@@ -16446,39 +16446,24 @@
         }
 
         function buildCampaignHtml(whatsapp) {
-            var waNum  = (whatsapp || '').replace(/\D/g, '');
-            var waLink = 'https://wa.me/' + waNum + '?text=' + encodeURIComponent('Hi, I want to activate my Post-UTME access for ₦1,000');
-            return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>' +
-                '<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">' +
-                '<div style="max-width:560px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">' +
-                  '<div style="background:#6366f1;padding:28px 32px;">' +
-                    '<h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">Inside OAU! 🎓</h1>' +
-                    '<p style="color:rgba(255,255,255,0.75);margin:6px 0 0;font-size:13px;">OAU Post-UTME Preparation</p>' +
-                  '</div>' +
-                  '<div style="padding:32px;">' +
-                    '<h2 style="color:#111;margin:0 0 14px;font-size:20px;">Hi {{params.name}},</h2>' +
-                    '<p style="color:#444;line-height:1.7;margin:0 0 10px;">You signed up on <strong>Inside OAU!</strong> but haven\'t unlocked your <strong>Post-UTME access</strong> yet.</p>' +
-                    '<p style="color:#444;line-height:1.7;margin:0 0 22px;">For a very limited time, we\'re dropping the price from <s style="color:#bbb;">₦7,000</s> to just:</p>' +
-                    '<div style="text-align:center;background:#f0f0ff;border-radius:10px;padding:24px;margin:0 0 24px;">' +
-                      '<div style="font-size:52px;font-weight:900;color:#6366f1;line-height:1;">₦1,000</div>' +
-                      '<div style="color:#888;font-size:14px;margin-top:8px;">One-time payment · Lifetime access</div>' +
-                    '</div>' +
-                    '<h3 style="color:#111;font-size:15px;margin:0 0 10px;">What you unlock:</h3>' +
-                    '<ul style="color:#444;line-height:2.1;padding-left:18px;margin:0 0 28px;">' +
-                      '<li>OAU Post-UTME past questions in CBT format</li>' +
-                      '<li>Unlimited practice sessions &amp; timed mock exams</li>' +
-                      '<li>Virtual classroom with AI Tutor</li>' +
-                      '<li>Full performance tracking &amp; analytics</li>' +
-                    '</ul>' +
-                    '<div style="text-align:center;margin-bottom:24px;">' +
-                      '<a href="' + waLink + '" style="background:#6366f1;color:#fff;text-decoration:none;padding:15px 36px;border-radius:8px;font-size:16px;font-weight:700;display:inline-block;">Activate Now — ₦1,000 →</a>' +
-                    '</div>' +
-                    '<p style="color:#888;font-size:13px;text-align:center;margin:0;">⏰ This price won\'t last. Tap the button above to pay on WhatsApp.</p>' +
-                  '</div>' +
-                  '<div style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;text-align:center;">' +
-                    '<p style="color:#ccc;font-size:11px;margin:0;">You received this because you registered on Inside OAU! · Reply STOP to unsubscribe.</p>' +
-                  '</div>' +
-                '</div></body></html>';
+            var waNum  = (whatsapp || '2347065529123').replace(/\D/g, '');
+            var waLink = 'https://wa.me/' + waNum + '?text=Hi%2C%20I%20want%20to%20activate%20my%20CBT%20access%20%E2%82%A61%2C000';
+            return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>Your Post-UTME practice is waiting</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{background-color:#0f0f0f;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:#e8e2d9;}.wrapper{max-width:540px;margin:0 auto;padding:32px 16px 48px;}.sender-badge{display:inline-flex;align-items:center;gap:10px;margin-bottom:28px;}.sender-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#c9a84c 0%,#f0c849 100%);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#0f0f0f;letter-spacing:-0.5px;flex-shrink:0;}.sender-info{line-height:1.3;}.sender-name{font-size:14px;font-weight:600;color:#e8e2d9;}.sender-role{font-size:12px;color:#7a7570;}.card{background-color:#161616;border:1px solid #2a2a2a;border-radius:16px;padding:32px 28px;}.greeting{font-size:22px;font-weight:700;color:#f0f0f0;line-height:1.3;margin-bottom:18px;}.greeting span{color:#f0c849;}.body-text{font-size:15px;line-height:1.75;color:#b5afa8;margin-bottom:14px;}.body-text strong{color:#e8e2d9;font-weight:600;}.price-block{background:#0f0f0f;border:1px solid #2e2a22;border-radius:12px;padding:20px 22px;margin:24px 0;display:flex;align-items:center;justify-content:space-between;gap:16px;}.price-left{line-height:1.2;}.price-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#5a5550;margin-bottom:6px;}.price-old{font-size:18px;color:#4a4540;text-decoration:line-through;text-decoration-color:#6a4a1a;font-weight:500;}.price-new{font-size:34px;font-weight:800;color:#f0c849;letter-spacing:-1px;line-height:1;margin-top:2px;}.price-new span{font-size:16px;font-weight:500;color:#c9a84c;letter-spacing:0;}.price-right{text-align:right;flex-shrink:0;}.lifetime-badge{background:rgba(240,200,73,0.1);border:1px solid rgba(240,200,73,0.25);border-radius:8px;padding:8px 12px;font-size:12px;color:#f0c849;font-weight:600;line-height:1.4;text-align:center;}.features{list-style:none;margin:20px 0 26px;}.features li{font-size:14px;color:#9a9490;padding:7px 0;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;gap:10px;}.features li:last-child{border-bottom:none;}.features li::before{content:"✓";color:#f0c849;font-weight:700;font-size:13px;flex-shrink:0;}.cta-wrap{text-align:center;margin-top:6px;}.cta-button{display:inline-block;background:linear-gradient(135deg,#25D366 0%,#1ebe5d 100%);color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:16px 32px;border-radius:12px;letter-spacing:0.2px;width:100%;text-align:center;line-height:1.3;}.cta-subtext{margin-top:10px;font-size:12px;color:#5a5550;text-align:center;}.signoff{margin-top:28px;padding-top:20px;border-top:1px solid #1e1e1e;}.signoff p{font-size:14px;color:#7a7570;line-height:1.7;}.signoff .sig-name{font-weight:700;color:#b5afa8;display:block;margin-top:10px;}.signoff .sig-role{font-size:12px;color:#4a4540;}.footer{margin-top:24px;text-align:center;font-size:11px;color:#3a3530;line-height:1.6;}.footer a{color:#4a4540;}@media(max-width:480px){.card{padding:24px 18px;}.greeting{font-size:20px;}.price-new{font-size:28px;}.price-block{flex-direction:column;align-items:flex-start;gap:14px;}.price-right{align-self:stretch;}.lifetime-badge{width:100%;}}</style></head>' +
+            '<body><div class="wrapper">' +
+            '<div class="sender-badge"><div class="sender-avatar">BN</div><div class="sender-info"><div class="sender-name">Big NIFS — Inside OAU!</div><div class="sender-role">CBT Practice · Open to All University Aspirants</div></div></div>' +
+            '<div class="card">' +
+            '<div class="greeting">Hey <span>{{params.name}}</span>, your exam is closer than you think 👀</div>' +
+            '<p class="body-text">You signed up on the platform — which means you already know what\'s at stake. But you haven\'t activated your access yet, and I want to make sure that\'s not what holds you back.</p>' +
+            '<p class="body-text">Inside OAU! started on one campus, but this CBT platform was built for <strong>every aspirant</strong> — UNILAG, UI, UNIABUJA, LASU, wherever you\'re aiming. If you\'re writing Post-UTME, this is for you.</p>' +
+            '<p class="body-text">Right now, I\'m letting registered students unlock <strong>full lifetime access</strong> for just <strong>₦1,000</strong>. That\'s past questions, online tutorial sessions, timed mocks, and performance tracking — everything you need to walk into that hall prepared.</p>' +
+            '<p class="body-text">This price closes on <strong>Thursday, June 19 at 11:59 PM.</strong> After that it goes back to ₦7,000 — no exceptions.</p>' +
+            '<div class="price-block"><div class="price-left"><div class="price-label">Your access</div><div class="price-old">₦7,000</div><div class="price-new">₦1,000 <span>only</span></div></div><div class="price-right"><div class="lifetime-badge">Lifetime<br>Access</div></div></div>' +
+            '<ul class="features"><li>Post-UTME past questions in real CBT format</li><li>Unlimited practice sessions &amp; timed mock exams</li><li>Online tutorial sessions with live instruction</li><li>Performance tracking &amp; subject analytics</li></ul>' +
+            '<div class="cta-wrap"><a class="cta-button" href="' + waLink + '" target="_blank">Pay ₦1,000 &amp; Activate Now →</a><p class="cta-subtext">Tap to open WhatsApp and complete payment in minutes</p></div>' +
+            '<div class="signoff"><p>This closes Thursday night. After 11:59 PM, it\'s back to ₦7,000. I genuinely want you prepared for this exam — ₦1,000 is not the thing that should stop you. Don\'t overthink it.</p><span class="sig-name">Big NIFS 𓃵</span><span class="sig-role">Founder, Inside OAU! — Post-UTME CBT Platform</span></div>' +
+            '</div>' +
+            '<div class="footer">You\'re receiving this because you registered on insideoau.vercel.app.<br><a href="#">Unsubscribe</a></div>' +
+            '</div></body></html>';
         }
 
         function adminPreviewCampaign() {

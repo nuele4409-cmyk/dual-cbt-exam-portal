@@ -158,7 +158,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- ── PWA manifest & meta ─────────────────────────── -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#1a2742">
+    <meta name="theme-color" content="#020617">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -167,7 +167,7 @@
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
     <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png">
     <!-- ─────────────────────────────────────────────────── -->
-    <title>Inside OAU!𓃵 - Official UTME CBT</title>
+    <title>Inside OAU! — Official UTME CBT</title>
     <!-- Chart.js for Performance Analytics -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <!-- html2canvas for WhatsApp Share Card -->
@@ -179,6 +179,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <!-- Anti-FOUC: apply saved theme before first paint -->
+    <script>
+        (function(){var t=localStorage.getItem('app_theme')||'dark-glass';document.documentElement.setAttribute('data-theme',t);}());
+    </script>
 </head>
 
 <body>
@@ -201,8 +204,8 @@
     <div id="auth-overlay">
         <div class="auth-box">
             <div class="auth-logo">
-                <h1>Inside OAU!𓃵</h1>
-                <p>Official CBT & Post-UTME Portal</p>
+                <h1>Inside OAU!</h1>
+                <p>Official CBT &amp; Post-UTME Portal</p>
             </div>
 
             <!-- Tab switcher -->
@@ -279,6 +282,27 @@
         </div>
     </div>
     <!-- ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Bottom Navigation Bar ──────────────────────────────────────── -->
+    <nav id="app-bottom-nav">
+        <button class="nav-item active" id="nav-home" onclick="bottomNavGo('home')">
+            <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+            <span>Home</span>
+        </button>
+        <button class="nav-item" id="nav-practice" onclick="bottomNavGo('practice')">
+            <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <span>Practice</span>
+        </button>
+        <button class="nav-item" id="nav-scores" onclick="bottomNavGo('scores')">
+            <svg viewBox="0 0 24 24"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+            <span>Scores</span>
+        </button>
+        <button class="nav-item" id="nav-profile" onclick="bottomNavGo('profile')">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            <span>Profile</span>
+        </button>
+    </nav>
+    <!-- ──────────────────────────────────────────────────────────────── -->
 
     <!-- ══════════════════════════════════════════════════════════════════
          POST-UTME SCREEN — Paywall + coming-soon placeholder
@@ -1095,7 +1119,7 @@
         <!-- ── UTME Hero Bar ─────────────────────────────────────────── -->
         <div id="utme-hero-bar">
             <button class="back-to-portal" onclick="showPortalSelector()" style="position:absolute;top:0.75rem;left:0.75rem;color:#fff;font-size:0.82rem;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);border-radius:20px;padding:6px 14px;cursor:pointer;backdrop-filter:blur(4px);font-weight:600;min-width:44px;min-height:36px;z-index:100010;pointer-events:all;">← Portal</button>
-            <div class="utme-hero-name" id="utme-hero-name">Inside OAU!𓃵 UTME</div>
+            <div class="utme-hero-name" id="utme-hero-name">Inside OAU! UTME</div>
             <div class="utme-hero-sub">JAMB CBT Practice &amp; Mock Exams</div>
             <div class="utme-hero-id" id="utme-hero-id">Loading ID…</div>
             <div><span class="utme-hero-prize">🏆 Authorized CBT Testing Portal</span></div>

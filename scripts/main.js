@@ -345,7 +345,7 @@
         }
 
 /* ═══════════════════════════════════════════════════ */
-(function(){var t=localStorage.getItem('app_theme')||'saas';document.documentElement.setAttribute('data-theme',t);}());
+(function(){var t=localStorage.getItem('app_theme')||'dark-glass';document.documentElement.setAttribute('data-theme',t);}());
 
 /* ═══════════════════════════════════════════════════ */
         const ADMIN_WHATSAPP = "2347065529123"; // Replace with your real number
@@ -13737,6 +13737,7 @@
                 if (lb) lb.style.display = 'none';
 
                 // 3. Hide all screens
+                _setBottomNavVisible(false);
                 var authOv = document.getElementById('auth-overlay');
                 if (authOv) authOv.classList.add('hidden');
                 var postScreen = document.getElementById('post-utme-screen');
@@ -13772,6 +13773,69 @@
         }
         // Make sure it's reachable from inline onclick attrs
         window.showPortalSelector = showPortalSelector;
+
+        // ── Bottom Navigation ─────────────────────────────────────────────
+        function _setBottomNavVisible(visible) {
+            var nav = document.getElementById('app-bottom-nav');
+            if (!nav) return;
+            if (visible) nav.classList.add('visible');
+            else nav.classList.remove('visible');
+        }
+
+        function _setBottomNavActive(tab) {
+            ['home','practice','scores','profile'].forEach(function(id) {
+                var btn = document.getElementById('nav-' + id);
+                if (btn) btn.classList.toggle('active', id === tab);
+            });
+        }
+
+        function bottomNavGo(tab) {
+            _setBottomNavActive(tab);
+            var portal = window._activePortal || 'utme';
+
+            if (portal === 'post-utme') {
+                if (tab === 'home') {
+                    backToPutmeHome();
+                } else if (tab === 'practice') {
+                    backToPutmeHome();
+                    setTimeout(function() { openSubjectModal('practice'); }, 120);
+                } else if (tab === 'scores') {
+                    openMyHistory();
+                } else if (tab === 'profile') {
+                    _navShowProfile();
+                }
+            } else {
+                if (tab === 'home') {
+                    showUtmeHome();
+                    window.scrollTo(0, 0);
+                    var us = document.getElementById('utme-screen'); if (us) us.scrollTop = 0;
+                } else if (tab === 'practice') {
+                    showUtmeHome();
+                    openUtmePracticeMode();
+                } else if (tab === 'scores') {
+                    showUtmeHome();
+                    loadExamHistory().then(function() {
+                        var hc = document.getElementById('history-card');
+                        if (hc) {
+                            hc.style.display = 'block';
+                            hc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }).catch(function() {});
+                } else if (tab === 'profile') {
+                    _navShowProfile();
+                }
+            }
+        }
+
+        function _navShowProfile() {
+            var user = window._authUser;
+            var profile = window._authProfile;
+            var name  = (profile && profile.full_name) || (user && user.user_metadata && user.user_metadata.full_name) || 'Student';
+            var sid   = (profile && profile.student_id) || '—';
+            var email = (user && user.email) || '—';
+            if (window.confirm(name + '\n' + sid + '\n' + email + '\n\nSign out?')) doSignOut();
+        }
+        window.bottomNavGo = bottomNavGo;
 
         // ── Expose UTME functions called via inline onclick ──────────────
         window.authenticateAndStart = authenticateAndStart;
@@ -13834,6 +13898,10 @@
             // Show the UTME screen and always scroll it to the top
             var _us = document.getElementById('utme-screen');
             if (_us) { _us.style.display = 'block'; _us.scrollTop = 0; }
+
+            window._activePortal = 'utme';
+            _setBottomNavVisible(true);
+            _setBottomNavActive('home');
         }
 
         // ── Enter Post-UTME Portal ────────────────────────────────────────
@@ -13847,7 +13915,6 @@
 
             var screen = document.getElementById('post-utme-screen');
             var paywall = document.getElementById('paywall-gate');
-            var homeEl = document.getElementById('post-utme-home');
             var profile = window._authProfile;
             var hasAccess = profile && profile.has_post_utme_access;
 
@@ -13866,16 +13933,42 @@
             }
             // ── END FREE TRIAL CHECK ────────────────────────────────────
 
-            screen.classList.add('visible');
+            // Store globally so exam engine can enforce preview limit
+            window._putmeHasAccess = hasAccess;
 
-            if (hasAccess) {
-                if (paywall) paywall.style.display = 'none';
-                if (homeEl) homeEl.style.display = 'none';
-                showPostUtmeHome();
-            } else {
-                if (paywall) paywall.style.display = 'block';
-                if (homeEl) homeEl.style.display = 'none';
+            screen.classList.add('visible');
+            if (paywall) paywall.style.display = 'none'; // paywall no longer blocks entry
+
+            showPostUtmeHome();
+
+            // Inject or remove the preview-mode banner
+            var existingBanner = document.getElementById('putme-preview-banner');
+            if (existingBanner) existingBanner.remove();
+            if (!hasAccess) {
+                var banner = document.createElement('div');
+                banner.id = 'putme-preview-banner';
+                banner.className = 'putme-preview-banner';
+                banner.innerHTML =
+                    '🔓 <strong>Preview Mode</strong> — 10 questions per session. ' +
+                    '<button onclick="_showPutmeActivation()" class="putme-activate-link">Enter activation code</button> for unlimited access.';
+                var homeEl = document.getElementById('post-utme-home');
+                if (homeEl) homeEl.insertAdjacentElement('afterbegin', banner);
             }
+
+            window._activePortal = 'post-utme';
+            _setBottomNavVisible(true);
+            _setBottomNavActive('home');
+        }
+
+        function _showPutmeActivation() {
+            var paywall   = document.getElementById('paywall-gate');
+            var homeEl    = document.getElementById('post-utme-home');
+            var resWrap   = document.getElementById('putme-result-wrap');
+            var examWrap  = document.getElementById('putme-exam-wrap');
+            if (homeEl)   homeEl.style.display   = 'none';
+            if (resWrap)  resWrap.classList.remove('active');
+            if (examWrap) examWrap.classList.remove('active');
+            if (paywall)  paywall.style.display  = 'block';
         }
 
         // ── Activation Code Redemption ────────────────────────────────────
@@ -14601,6 +14694,14 @@
                 return;
             }
 
+            // Preview mode: non-activated users get 10 questions only
+            if (!window._putmeHasAccess) {
+                _putme.isPreview = true;
+                allQuestions = allQuestions.slice(0, 10);
+            } else {
+                _putme.isPreview = false;
+            }
+
             initPutmeExam(allQuestions, subjects, mode, university);
         }
 
@@ -14933,6 +15034,26 @@
                     '<div style="font-size:0.78rem;color:#888;">' + spct + '%</div></div>';
             });
             document.getElementById('putme-subject-scores').innerHTML = subjHtml;
+
+            // Preview upsell: remove any previous card, then inject if still in preview mode
+            var oldUpsell = document.getElementById('putme-preview-upsell');
+            if (oldUpsell) oldUpsell.remove();
+            if (_putme.isPreview) {
+                var upsell = document.createElement('div');
+                upsell.id = 'putme-preview-upsell';
+                upsell.className = 'putme-preview-upsell';
+                upsell.innerHTML =
+                    '<div class="putme-upsell-icon">🔓</div>' +
+                    '<h3>Want the full experience?</h3>' +
+                    '<p>This was a 10-question preview. Activate your account to unlock:</p>' +
+                    '<ul>' +
+                    '<li>Full mock exams (40–100 questions)</li>' +
+                    '<li>All subjects &amp; universities</li>' +
+                    '<li>Sprint Challenges &amp; Leaderboard</li>' +
+                    '</ul>' +
+                    '<button onclick="_showPutmeActivation()" class="putme-upsell-btn">Activate Now</button>';
+                resWrap.appendChild(upsell);
+            }
         }
 
         // ── Corrections ───────────────────────────────────────────────────────
@@ -17206,8 +17327,8 @@
 
             // Apply saved theme immediately (anti-FOUC already ran in <head>,
             // but this ensures button active-states are painted correctly)
-            var saved = 'saas';
-            try { saved = localStorage.getItem('app_theme') || 'saas'; } catch(e) {}
+            var saved = 'dark-glass';
+            try { saved = localStorage.getItem('app_theme') || 'dark-glass'; } catch(e) {}
             setTheme(saved);
         }());
 

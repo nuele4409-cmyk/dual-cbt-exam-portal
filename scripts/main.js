@@ -13961,25 +13961,117 @@
         }
 
         function _showPutmeActivation() {
-            var paywall   = document.getElementById('paywall-gate');
-            var homeEl    = document.getElementById('post-utme-home');
-            var resWrap   = document.getElementById('putme-result-wrap');
-            var examWrap  = document.getElementById('putme-exam-wrap');
-            if (homeEl)   homeEl.style.display   = 'none';
-            if (resWrap)  resWrap.classList.remove('active');
-            if (examWrap) examWrap.classList.remove('active');
-            if (paywall)  paywall.style.display  = 'block';
+            // No longer used for entry — kept only as a fallback for redeemActivationCode flow
         }
 
-        // Returns true if user has full access; otherwise shows activation gate and returns false.
-        function _requirePutmeAccess() {
+        // Shows a lightweight activation modal over the current screen.
+        function _showActivationModal(featureName) {
+            var existing = document.getElementById('putme-activation-modal');
+            if (existing) existing.remove();
+
+            var overlay = document.createElement('div');
+            overlay.id = 'putme-activation-modal';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+
+            var box = document.createElement('div');
+            box.style.cssText = 'background:#fff;border-radius:16px;padding:1.8rem 1.4rem;max-width:360px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.25);';
+
+            var title = document.createElement('div');
+            title.style.cssText = 'font-size:2rem;margin-bottom:0.4rem;';
+            title.textContent = '🔐';
+
+            var h3 = document.createElement('h3');
+            h3.style.cssText = 'color:#e65100;margin:0 0 0.5rem;font-size:1.1rem;';
+            h3.textContent = (featureName || 'This feature') + ' requires activation';
+
+            var p = document.createElement('p');
+            p.style.cssText = 'color:#555;font-size:0.88rem;margin:0 0 1.1rem;';
+            p.textContent = 'Get your activation code on WhatsApp, then enter it below.';
+
+            var waBtn = document.createElement('a');
+            waBtn.href = 'https://wa.me/2347065529123?text=Hi%2C%20I%20want%20to%20activate%20the%20Post-UTME%20portal';
+            waBtn.target = '_blank';
+            waBtn.style.cssText = 'display:block;background:#25D366;color:#fff;font-weight:700;font-size:0.95rem;padding:0.65rem 1rem;border-radius:10px;text-decoration:none;margin-bottom:1rem;';
+            waBtn.textContent = '💬 Get Code on WhatsApp';
+
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'modal-activation-input';
+            input.maxLength = 10;
+            input.placeholder = 'Enter activation code';
+            input.style.cssText = 'width:100%;box-sizing:border-box;padding:0.6rem 0.8rem;border:2px solid #ffcc02;border-radius:8px;font-size:1rem;margin-bottom:0.5rem;text-align:center;letter-spacing:2px;text-transform:uppercase;outline:none;';
+
+            var errDiv = document.createElement('div');
+            errDiv.id = 'modal-activation-error';
+            errDiv.style.cssText = 'color:#c62828;font-size:0.82rem;min-height:1.1rem;margin-bottom:0.5rem;';
+
+            var activateBtn = document.createElement('button');
+            activateBtn.textContent = 'Activate';
+            activateBtn.style.cssText = 'width:100%;background:#e65100;color:#fff;border:none;border-radius:10px;padding:0.65rem;font-weight:700;font-size:0.95rem;cursor:pointer;margin-bottom:0.6rem;';
+            activateBtn.onclick = function() { _redeemModalCode(); };
+
+            var cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:0.85rem;';
+            cancelBtn.onclick = function() { overlay.remove(); };
+
+            box.appendChild(title);
+            box.appendChild(h3);
+            box.appendChild(p);
+            box.appendChild(waBtn);
+            box.appendChild(input);
+            box.appendChild(errDiv);
+            box.appendChild(activateBtn);
+            box.appendChild(cancelBtn);
+            overlay.appendChild(box);
+            overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+            document.body.appendChild(overlay);
+            setTimeout(function() { input.focus(); }, 100);
+        }
+
+        async function _redeemModalCode() {
+            var input  = document.getElementById('modal-activation-input');
+            var errDiv = document.getElementById('modal-activation-error');
+            if (!input) return;
+            var code = input.value.trim().toUpperCase();
+            if (!code) { errDiv.textContent = 'Please enter your activation code.'; return; }
+            if (code.length !== 10) { errDiv.textContent = 'Code must be exactly 10 characters.'; return; }
+            errDiv.textContent = '';
+            input.disabled = true;
+
+            try {
+                var { data, error } = await _postSupabase.rpc('redeem_activation_code', { input_code: code });
+                if (error) throw error;
+                if (data === 'OK') {
+                    // Refresh profile
+                    var { data: pData } = await _postSupabase
+                        .from('profiles')
+                        .select('student_id, full_name, has_post_utme_access, streak_count, badges, is_admin, last_active, selected_university, post_utme_subjects')
+                        .eq('id', window._authUser.id).single();
+                    if (pData) { window._authProfile = pData; window._putmeHasAccess = true; }
+                    var modal = document.getElementById('putme-activation-modal');
+                    if (modal) modal.remove();
+                    // Re-enter portal fully
+                    enterPostUtmePortal();
+                } else {
+                    errDiv.textContent = '❌ Invalid or already-used code.';
+                    input.disabled = false;
+                }
+            } catch(e) {
+                errDiv.textContent = 'Error: ' + (e.message || 'Try again.');
+                input.disabled = false;
+            }
+        }
+
+        // Returns true if user has full access; otherwise shows modal and returns false.
+        function _requirePutmeAccess(featureName) {
             if (window._putmeHasAccess) return true;
-            _showPutmeActivation();
+            _showActivationModal(featureName);
             return false;
         }
 
         function openClassroomPortal() {
-            if (!_requirePutmeAccess()) return;
+            if (!_requirePutmeAccess('Classroom')) return;
             window.open('https://insideoaututorial.up.railway.app', '_blank');
         }
 
@@ -15586,7 +15678,7 @@
 
         // ── Sprint Challenge ──────────────────────────────────────────────────
         function startSprintChallenge() {
-            if (!_requirePutmeAccess()) return;
+            if (!_requirePutmeAccess('Sprint Challenge')) return;
             if (!_putme.subjects || _putme.subjects.length === 0) {
                 alert('Please select your subjects first by starting a Practice or Mock exam.');
                 return;
@@ -15719,7 +15811,7 @@
 
         // ── My History ────────────────────────────────────────────────────────
         async function openMyHistory() {
-            if (!_requirePutmeAccess()) return;
+            if (!_requirePutmeAccess('My History')) return;
             if (!_postSupabase || !window._authUser) { alert('Please sign in to view history.'); return; }
             var overlay = document.createElement('div');
             overlay.id = 'my-hist-overlay';
@@ -15766,7 +15858,7 @@
 
         // ── Performance Analytics Hub ─────────────────────────────────────────
         async function openAnalyticsHub() {
-            if (!_requirePutmeAccess()) return;
+            if (!_requirePutmeAccess('Analytics')) return;
             if (!_postSupabase || !window._authUser) { alert('Please sign in to view analytics.'); return; }
 
             var overlay = document.createElement('div');
@@ -16737,7 +16829,7 @@
         }
 
         function openDuelLobby() {
-            if (!_requirePutmeAccess()) return;
+            if (!_requirePutmeAccess('Head-to-Head Duel')) return;
             if (!_postSupabase || !window._authUser) {
                 alert('Please sign in to use Head-to-Head Duels.');
                 return;

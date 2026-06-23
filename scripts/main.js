@@ -13971,6 +13971,18 @@
             if (paywall)  paywall.style.display  = 'block';
         }
 
+        // Returns true if user has full access; otherwise shows activation gate and returns false.
+        function _requirePutmeAccess() {
+            if (window._putmeHasAccess) return true;
+            _showPutmeActivation();
+            return false;
+        }
+
+        function openClassroomPortal() {
+            if (!_requirePutmeAccess()) return;
+            window.open('https://insideoaututorial.up.railway.app', '_blank');
+        }
+
         // ── Activation Code Redemption ────────────────────────────────────
         async function redeemActivationCode() {
             if (!_postSupabase) {
@@ -15574,6 +15586,7 @@
 
         // ── Sprint Challenge ──────────────────────────────────────────────────
         function startSprintChallenge() {
+            if (!_requirePutmeAccess()) return;
             if (!_putme.subjects || _putme.subjects.length === 0) {
                 alert('Please select your subjects first by starting a Practice or Mock exam.');
                 return;
@@ -15706,6 +15719,7 @@
 
         // ── My History ────────────────────────────────────────────────────────
         async function openMyHistory() {
+            if (!_requirePutmeAccess()) return;
             if (!_postSupabase || !window._authUser) { alert('Please sign in to view history.'); return; }
             var overlay = document.createElement('div');
             overlay.id = 'my-hist-overlay';
@@ -15752,6 +15766,7 @@
 
         // ── Performance Analytics Hub ─────────────────────────────────────────
         async function openAnalyticsHub() {
+            if (!_requirePutmeAccess()) return;
             if (!_postSupabase || !window._authUser) { alert('Please sign in to view analytics.'); return; }
 
             var overlay = document.createElement('div');
@@ -16722,6 +16737,7 @@
         }
 
         function openDuelLobby() {
+            if (!_requirePutmeAccess()) return;
             if (!_postSupabase || !window._authUser) {
                 alert('Please sign in to use Head-to-Head Duels.');
                 return;

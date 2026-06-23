@@ -6,7 +6,7 @@
 //    • Fallback: serve cached index.html when offline
 // ─────────────────────────────────────────────────────────────
 
-const CACHE = 'insideoau-cbt-v3';
+const CACHE = 'insideoau-cbt-v4';
 
 const PRECACHE = [
   '/',
@@ -18,8 +18,8 @@ const PRECACHE = [
 ];
 
 // ── INSTALL: pre-cache the app shell ─────────────────────────
-// NOTE: No skipWaiting() here — we wait for user to confirm update
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE).then(cache => cache.addAll(PRECACHE))
   );

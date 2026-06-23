@@ -14956,6 +14956,24 @@
             }
 
             renderPutmeNavigator();
+            _updatePutmeProgress();
+        }
+
+        function _updatePutmeProgress() {
+            var el = document.getElementById('putme-live-count');
+            if (!el) return;
+            var total    = _putme.questions.length;
+            var answered = Object.keys(_putme.answers).length;
+            el.textContent = answered + ' / ' + total + ' answered';
+            if (answered === total && total > 0) {
+                el.style.color      = '#2e7d32';
+                el.style.background = '#e8f5e9';
+                el.style.borderColor = '#a5d6a7';
+            } else {
+                el.style.color      = '#e65100';
+                el.style.background = '#fff3e0';
+                el.style.borderColor = '#ffcc02';
+            }
         }
 
         function getGlobalIndex(sub, localIdx) {

@@ -14550,7 +14550,7 @@
             var user = window._authUser;
             var name = (profile && profile.full_name)
                 || (user && user.user_metadata && user.user_metadata.full_name) || 'Student';
-            var sid = (profile && profile.student_id) || 'IOAU-—';
+            var sid = (profile && profile.student_id) || getOrGenerateID();
             var uni = (profile && profile.selected_university) || null;
             var nameEl = document.getElementById('putme-name');
             var sidEl  = document.getElementById('putme-sid');

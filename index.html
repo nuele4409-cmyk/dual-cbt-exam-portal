@@ -310,7 +310,7 @@
          ══════════════════════════════════════════════════════════════════ -->
     <div id="post-utme-screen">
         <div class="container-inner">
-            <button class="back-to-portal" onclick="showPortalSelector()">← Back to Portal Selector</button>
+            <!-- back-to-portal moved into putme-app-header -->
 
             <!-- Paywall gate (shown when has_post_utme_access = false) -->
             <div id="paywall-gate" class="paywall-card" style="display:none;">
@@ -332,111 +332,116 @@
                 </p>
             </div>
 
-            <!-- Post-UTME home (shown when has_post_utme_access = true) -->
+            <!-- Post-UTME home -->
             <div id="post-utme-home" style="display:none;">
-                <div class="putme-home">
-                    <div class="putme-welcome-bar">
+
+                <!-- ── Sticky App Header ── -->
+                <div class="putme-app-header">
+                    <button class="putme-back-btn" onclick="showPortalSelector()" aria-label="Back">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                    </button>
+                    <span class="putme-header-title">Post-UTME</span>
+                    <div class="putme-avatar" id="putme-avatar" onclick="showPortalSelector()">?</div>
+                </div>
+
+                <div class="putme-scroll-body">
+
+                    <!-- ── User info row ── -->
+                    <div class="putme-user-row">
                         <div>
-                            <div class="name" id="putme-name">Welcome!</div>
-                            <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
-                                <div style="font-size:0.8rem;color:rgba(255,255,255,0.7);"
-                                    id="putme-uni-display">No university selected yet</div>
-                                <button id="change-uni-btn" onclick="changeUniversity()"
-                                    style="display:none;font-size:0.7rem;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:20px;padding:2px 9px;cursor:pointer;font-family:inherit;">Change</button>
+                            <div class="putme-user-name" id="putme-name">Welcome!</div>
+                            <div class="putme-user-sub">
+                                <span id="putme-uni-display">No university selected yet</span>
+                                <button id="change-uni-btn" onclick="changeUniversity()" style="display:none;" class="putme-change-btn">Change</button>
                             </div>
                         </div>
-                        <div class="sid" id="putme-sid">IOAU-—</div>
+                        <div class="putme-sid-badge" id="putme-sid">IOAU-—</div>
                     </div>
+
+                    <!-- Preview mode banner (shown/hidden by JS) -->
+                    <div id="putme-preview-banner" class="putme-preview-banner" style="display:none;">
+                        🔓 <strong>Preview</strong> — 10 questions per session.
+                        <button onclick="_showPutmeActivation()" class="putme-activate-link">Activate</button>
+                    </div>
+
+                    <!-- ── University Selection Card ── -->
                     <div class="uni-card" id="uni-select-card">
-                        <h3>🏫 Select Your Target University</h3>
-                        <p>Choose the university you're preparing for. This filters your question bank and study
-                            materials.</p>
-                        <div style="margin-bottom:0.5rem;">
-                            <input type="text" id="uni-search-input"
-                                placeholder="🔍 Search by name or abbreviation (e.g. OAU, Lagos...)"
-                                oninput="_filterUniDropdown(this.value)"
-                                style="width:100%;padding:0.8rem 1rem;border:1.5px solid #dde3ea;border-radius:8px;font-size:0.9rem;box-sizing:border-box;margin-bottom:0.6rem;outline:none;transition:border-color 0.2s;font-family:inherit;">
-                            <select id="uni-dropdown" size="8"
-                                onchange="selectUniversity(this.value)"
-                                style="width:100%;border:1.5px solid #dde3ea;border-radius:8px;padding:0.4rem;font-size:0.88rem;cursor:pointer;outline:none;font-family:inherit;">
-                                <option value="">-- Select your university --</option>
-                            </select>
-                        </div>
-                        <button class="save-uni-btn" id="save-uni-btn" onclick="saveUniversity()" disabled>Save
-                            University</button>
-                        <div id="uni-save-msg"
-                            style="text-align:center;margin-top:0.6rem;font-size:0.85rem;color:#28a745;display:none;">✅
-                            University saved!</div>
+                        <h3>🏫 Select Your University</h3>
+                        <p>Choose the university you're preparing for.</p>
+                        <input type="text" id="uni-search-input"
+                            placeholder="🔍 Search by name or abbreviation..."
+                            oninput="_filterUniDropdown(this.value)"
+                            style="width:100%;padding:0.75rem 1rem;border:1.5px solid #dde3ea;border-radius:8px;font-size:0.9rem;box-sizing:border-box;margin-bottom:0.5rem;outline:none;font-family:inherit;">
+                        <select id="uni-dropdown" size="6"
+                            onchange="selectUniversity(this.value)"
+                            style="width:100%;border:1.5px solid #dde3ea;border-radius:8px;padding:0.4rem;font-size:0.88rem;cursor:pointer;outline:none;font-family:inherit;">
+                            <option value="">-- Select your university --</option>
+                        </select>
+                        <button class="save-uni-btn" id="save-uni-btn" onclick="saveUniversity()" disabled style="margin-top:0.7rem;">Save University</button>
+                        <div id="uni-save-msg" style="text-align:center;margin-top:0.5rem;font-size:0.85rem;color:#28a745;display:none;">✅ University saved!</div>
                     </div>
+
+                    <!-- ── Action Grid (shown after uni saved) ── -->
                     <div id="putme-action-grid" style="display:none;">
-                        <!-- Gamification bar -->
-                        <div class="gami-bar" id="gami-bar" style="display:none;">
-                            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                                <div class="streak-pill"><span class="streak-fire">🔥</span><span
-                                        id="streak-num">0</span> day streak</div>
-                                <div class="badges-row" id="badges-row"></div>
-                            </div>
-                            <div class="rank-pill" id="rank-pill" style="display:none;">🏆 Rank #<span
-                                    id="rank-num">—</span></div>
+
+                        <!-- Gamification chips -->
+                        <div class="putme-gami-chips" id="gami-bar" style="display:none;">
+                            <div class="putme-gami-chip"><span class="streak-fire">🔥</span> <span id="streak-num">0</span> day streak</div>
+                            <div class="badges-row" id="badges-row"></div>
+                            <div class="putme-gami-chip" id="rank-pill" style="display:none;">🏆 Rank #<span id="rank-num">—</span></div>
                         </div>
-                        <!-- Scheduled Mock Events Banner -->
+
+                        <!-- Scheduled Mock Events -->
                         <div class="mock-events-section" id="mock-events-section" style="display:none;"></div>
 
-                        <!-- Saved subjects strip — shown once subjects are set -->
-                        <div id="saved-subjects-bar" style="display:none;background:#f0f4ff;border:1px solid #c7d7f5;border-radius:10px;padding:9px 14px;margin-bottom:12px;display:none;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-                            <div style="font-size:0.82rem;color:#1a2742;"><span style="font-weight:700;">Your subjects:</span> <span id="saved-subjects-label" style="color:#374151;"></span></div>
-                            <button onclick="openChangeSubjectsModal()" style="font-size:0.75rem;background:#312e81;color:#fff;border:none;border-radius:20px;padding:4px 12px;cursor:pointer;white-space:nowrap;">Change</button>
+                        <!-- Saved subjects strip -->
+                        <div id="saved-subjects-bar" style="display:none;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:9px 14px;margin-bottom:10px;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                            <div style="font-size:0.82rem;"><span style="font-weight:700;">Your subjects:</span> <span id="saved-subjects-label" style="opacity:0.75;"></span></div>
+                            <button onclick="openChangeSubjectsModal()" style="font-size:0.75rem;background:#6366f1;color:#fff;border:none;border-radius:20px;padding:4px 12px;cursor:pointer;white-space:nowrap;">Change</button>
                         </div>
 
-                        <div class="putme-actions" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));">
-                            <div class="putme-action-card" onclick="openSubjectModal('practice')">
-                                <div class="ac-icon">📝</div>
-                                <h4>Practice Mode</h4>
-                                <p>Untimed — practice at your own pace with instant feedback</p>
+                        <!-- Icon grid -->
+                        <div class="putme-icon-grid">
+                            <div class="putme-icon-card" onclick="openSubjectModal('practice')">
+                                <div class="pic-icon">📝</div>
+                                <div class="pic-label">Practice</div>
+                                <div class="pic-sub">Untimed · feedback</div>
                             </div>
-                            <div class="putme-action-card" onclick="openClassroomPortal()">
-                                <div class="ac-icon">🏫</div>
-                                <h4>Classroom</h4>
-                                <p>Join the Virtual Tutorial</p>
+                            <div class="putme-icon-card" onclick="openClassroomPortal()">
+                                <div class="pic-icon">🏫</div>
+                                <div class="pic-label">Classroom</div>
+                                <div class="pic-sub">Virtual tutorial</div>
                             </div>
-                            <div class="putme-action-card" onclick="openMyHistory()">
-                                <div class="ac-icon">📊</div>
-                                <h4>My History</h4>
-                                <p>Review all past Post-UTME attempts and score trends</p>
+                            <div class="putme-icon-card pic-red" onclick="startSprintChallenge()">
+                                <div class="pic-icon">🏃</div>
+                                <div class="pic-label">Sprint</div>
+                                <div class="pic-sub">3 min · 10 qs 🔐</div>
                             </div>
-                            <div class="putme-action-card" onclick="startSprintChallenge()"
-                                style="border:2px solid #c0392b;">
-                                <div class="ac-icon">🏃</div>
-                                <h4>Sprint Challenge</h4>
-                                <p>10 questions · 3 minutes · beat your best score</p>
+                            <div class="putme-icon-card pic-red" onclick="openDuelLobby()">
+                                <div class="pic-icon">⚔️</div>
+                                <div class="pic-label">Duel</div>
+                                <div class="pic-sub">Live 1v1 🔐</div>
                             </div>
-                            <div class="putme-action-card" onclick="openLeaderboard()"
-                                style="border:2px solid #ffd700;">
-                                <div class="ac-icon">🏆</div>
-                                <h4>Leaderboard</h4>
-                                <p>See where you rank against other students</p>
+                            <div class="putme-icon-card pic-gold" onclick="openLeaderboard()">
+                                <div class="pic-icon">🏆</div>
+                                <div class="pic-label">Leaderboard</div>
+                                <div class="pic-sub">See your rank</div>
                             </div>
-                            <div class="putme-action-card" onclick="openDuelLobby()"
-                                style="border:2px solid #c0392b;">
-                                <div class="ac-icon">⚔️</div>
-                                <h4>Duel</h4>
-                                <p>Challenge a friend to a live 1v1 quiz battle</p>
+                            <div class="putme-icon-card pic-purple" onclick="openAnalyticsHub()">
+                                <div class="pic-icon">📈</div>
+                                <div class="pic-label">Analytics</div>
+                                <div class="pic-sub">Score trends 🔐</div>
                             </div>
-                            <div class="putme-action-card" onclick="openAnalyticsHub()"
-                                style="border:2px solid #7c3aed;">
-                                <div class="ac-icon">📈</div>
-                                <h4>Analytics</h4>
-                                <p>Your stats — total exams, avg score, best score &amp; trends</p>
+                            <div class="putme-icon-card" onclick="openMyHistory()">
+                                <div class="pic-icon">📊</div>
+                                <div class="pic-label">My History</div>
+                                <div class="pic-sub">Past attempts 🔐</div>
                             </div>
                         </div>
-                        <div style="text-align:center;margin-top:0.5rem;">
-                            <button onclick="selectUniversity(null)"
-                                style="background:none;border:none;color:#0056b3;font-size:0.85rem;cursor:pointer;text-decoration:underline;">Change
-                                University</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
+                    </div><!-- /putme-action-grid -->
+                </div><!-- /putme-scroll-body -->
+            </div><!-- /post-utme-home -->
 
             <!-- 4-Subject Selection Modal -->
             <div id="subject-modal">

@@ -13941,19 +13941,9 @@
 
             showPostUtmeHome();
 
-            // Inject or remove the preview-mode banner
-            var existingBanner = document.getElementById('putme-preview-banner');
-            if (existingBanner) existingBanner.remove();
-            if (!hasAccess) {
-                var banner = document.createElement('div');
-                banner.id = 'putme-preview-banner';
-                banner.className = 'putme-preview-banner';
-                banner.innerHTML =
-                    '🔓 <strong>Preview Mode</strong> — 10 questions per session. ' +
-                    '<button onclick="_showPutmeActivation()" class="putme-activate-link">Enter activation code</button> for unlimited access.';
-                var homeEl = document.getElementById('post-utme-home');
-                if (homeEl) homeEl.insertAdjacentElement('afterbegin', banner);
-            }
+            // Show or hide the static preview banner
+            var banner = document.getElementById('putme-preview-banner');
+            if (banner) banner.style.display = hasAccess ? 'none' : 'block';
 
             window._activePortal = 'post-utme';
             _setBottomNavVisible(true);
@@ -14527,9 +14517,14 @@
             var sid = (profile && profile.student_id) || 'IOAU-—';
             var uni = (profile && profile.selected_university) || null;
             var nameEl = document.getElementById('putme-name');
-            var sidEl = document.getElementById('putme-sid');
-            if (nameEl) nameEl.textContent = 'Welcome, ' + name.split(' ')[0] + '! 🎓';
-            if (sidEl) sidEl.textContent = sid;
+            var sidEl  = document.getElementById('putme-sid');
+            var avEl   = document.getElementById('putme-avatar');
+            if (nameEl) nameEl.textContent = 'Hey, ' + name.split(' ')[0] + ' 👋';
+            if (sidEl)  sidEl.textContent  = sid;
+            if (avEl) {
+                var parts = name.trim().split(' ');
+                avEl.textContent = (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+            }
             if (uni) {
                 _selectedUni = uni;
                 selectUniversity(uni);

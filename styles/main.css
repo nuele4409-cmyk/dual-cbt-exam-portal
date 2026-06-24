@@ -795,16 +795,166 @@
         [data-theme="saas"] .nav-item.active { color: #0056b3; }
         [data-theme="saas"] .nav-item.active svg { stroke: #0056b3; }
 
-        /* Post-UTME paywall / premium screen — full-screen overlay */
+        /* Post-UTME — full-screen, no padding (header + scroll-body handle spacing) */
         #post-utme-screen {
             display: none;
             position: fixed;
             inset: 0;
             background: var(--bg);
             z-index: 99997;
-            overflow-y: auto;
-            padding: 1.5rem 1rem calc(80px + env(safe-area-inset-bottom));
+            overflow: hidden;
+            padding: 0;
         }
+
+        /* ── App Header ── */
+        .putme-app-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(128,128,128,0.15);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: inherit;
+        }
+        .putme-back-btn {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            opacity: 0.75;
+        }
+        .putme-back-btn:hover { opacity: 1; }
+        .putme-header-title {
+            flex: 1;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        .putme-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg,#6366f1,#818cf8);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            flex-shrink: 0;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── Scrollable body ── */
+        .putme-scroll-body {
+            height: calc(100vh - 57px - 60px - env(safe-area-inset-bottom));
+            overflow-y: auto;
+            padding: 14px 14px 20px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* ── User info row ── */
+        .putme-user-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .putme-user-name {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        .putme-user-sub {
+            font-size: 0.78rem;
+            opacity: 0.55;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 2px;
+        }
+        .putme-sid-badge {
+            font-size: 0.72rem;
+            background: rgba(128,128,128,0.1);
+            border: 1px solid rgba(128,128,128,0.2);
+            border-radius: 20px;
+            padding: 3px 10px;
+            opacity: 0.7;
+            white-space: nowrap;
+        }
+        .putme-change-btn {
+            background: rgba(128,128,128,0.12);
+            border: 1px solid rgba(128,128,128,0.2);
+            border-radius: 20px;
+            padding: 1px 8px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        /* ── Preview banner (slim) ── */
+        .putme-preview-banner {
+            background: rgba(251,191,36,0.1);
+            border: 1px solid rgba(251,191,36,0.25);
+            border-radius: 8px;
+            padding: 7px 12px;
+            font-size: 0.8rem;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        /* ── Gamification chips ── */
+        .putme-gami-chips {
+            display: flex;
+            gap: 7px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .putme-gami-chip {
+            background: rgba(128,128,128,0.1);
+            border: 1px solid rgba(128,128,128,0.15);
+            border-radius: 20px;
+            padding: 5px 13px;
+            font-size: 0.78rem;
+        }
+
+        /* ── Icon grid ── */
+        .putme-icon-grid {
+            display: grid;
+            grid-template-columns: repeat(2,1fr);
+            gap: 10px;
+            margin-top: 4px;
+        }
+        .putme-icon-card {
+            background: rgba(128,128,128,0.06);
+            border: 1px solid rgba(128,128,128,0.13);
+            border-radius: 14px;
+            padding: 18px 10px 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: opacity 0.15s, transform 0.1s;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .putme-icon-card:active { transform: scale(0.95); opacity: 0.8; }
+        .pic-icon  { font-size: 2rem; margin-bottom: 6px; line-height: 1; }
+        .pic-label { font-size: 0.88rem; font-weight: 700; }
+        .pic-sub   { font-size: 0.7rem; opacity: 0.45; margin-top: 3px; }
+
+        .putme-icon-card.pic-red    { background:rgba(192,57,43,0.1); border-color:rgba(192,57,43,0.25); }
+        .putme-icon-card.pic-red .pic-label  { color:#e57373; }
+        .putme-icon-card.pic-gold   { background:rgba(218,165,32,0.1); border-color:rgba(218,165,32,0.25); }
+        .putme-icon-card.pic-gold .pic-label { color:#f6b83b; }
+        .putme-icon-card.pic-purple { background:rgba(124,58,237,0.1); border-color:rgba(124,58,237,0.22); }
+        .putme-icon-card.pic-purple .pic-label { color:#a78bfa; }
+
+        /* container-inner no longer needs a max-width cap on this screen */
+        #post-utme-screen .container-inner { max-width:100%; height:100%; display:flex; flex-direction:column; }
 
         #post-utme-screen.visible {
             display: block;
@@ -3683,45 +3833,52 @@
             background-attachment: fixed !important;
         }
 
-        /* ── Welcome bar ── */
+        /* ── App header per theme ── */
+        [data-theme="dark-glass"] .putme-app-header { background: #020617; border-color: rgba(255,255,255,0.08); }
+        [data-theme="dark-glass"] .putme-header-title { color: #f1f5f9; }
+        [data-theme="dark-glass"] .putme-back-btn { color: #cbd5e1; }
+        [data-theme="dark-glass"] .putme-user-name { color: #f1f5f9; }
+        [data-theme="dark-glass"] .putme-user-sub  { color: rgba(255,255,255,0.4); }
+        [data-theme="dark-glass"] .putme-sid-badge { color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
+        [data-theme="dark-glass"] .putme-change-btn { color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
+        [data-theme="dark-glass"] .putme-gami-chip { color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
+        [data-theme="dark-glass"] .putme-icon-card { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.09); }
+        [data-theme="dark-glass"] .putme-icon-card .pic-label { color: #e2e8f0; }
+        [data-theme="dark-glass"] .putme-icon-card .pic-sub   { color: rgba(255,255,255,0.35); }
+        [data-theme="dark-glass"] .putme-icon-card.pic-red    { background: rgba(192,57,43,0.14); border-color: rgba(192,57,43,0.3); }
+        [data-theme="dark-glass"] .putme-icon-card.pic-gold   { background: rgba(218,165,32,0.12); border-color: rgba(218,165,32,0.28); }
+        [data-theme="dark-glass"] .putme-icon-card.pic-purple { background: rgba(124,58,237,0.13); border-color: rgba(124,58,237,0.25); }
+
+        [data-theme="light-glass"] .putme-app-header { background: #f1f5f9; border-color: rgba(0,0,0,0.08); }
+        [data-theme="light-glass"] .putme-header-title { color: #0f172a; }
+        [data-theme="light-glass"] .putme-back-btn { color: #334155; }
+        [data-theme="light-glass"] .putme-user-name { color: #0f172a; }
+        [data-theme="light-glass"] .putme-user-sub  { color: #64748b; }
+        [data-theme="light-glass"] .putme-gami-chip { color: #334155; background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.08); }
+        [data-theme="light-glass"] .putme-icon-card { background: rgba(255,255,255,0.7); border-color: rgba(0,0,0,0.08); }
+        [data-theme="light-glass"] .putme-icon-card .pic-label { color: #0f172a; }
+        [data-theme="light-glass"] .putme-icon-card .pic-sub   { color: #64748b; }
+
+        /* ── Welcome bar (legacy, kept for graceful fallback) ── */
         [data-theme="dark-glass"] .putme-welcome-bar {
             background: rgba(255,255,255,0.07) !important;
-            backdrop-filter: blur(16px) !important;
-            -webkit-backdrop-filter: blur(16px) !important;
             border: 1px solid rgba(255,255,255,0.1) !important;
         }
-        [data-theme="dark-glass"] .putme-welcome-bar .name { color: #f1f5f9 !important; }
-        [data-theme="dark-glass"] .putme-welcome-bar .sid  { color: rgba(255,255,255,0.55) !important; }
-
         [data-theme="light-glass"] .putme-welcome-bar {
             background: rgba(255,255,255,0.55) !important;
-            backdrop-filter: blur(16px) !important;
-            -webkit-backdrop-filter: blur(16px) !important;
             border: 1px solid rgba(255,255,255,0.65) !important;
         }
 
-        /* ── Action cards (dashboard) ── */
+        /* ── Icon cards (dashboard) ── */
         [data-theme="dark-glass"] .putme-action-card {
             background: rgba(255,255,255,0.07) !important;
-            backdrop-filter: blur(16px) !important;
-            -webkit-backdrop-filter: blur(16px) !important;
             border-color: rgba(255,255,255,0.1) !important;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.35) !important;
         }
         [data-theme="dark-glass"] .putme-action-card h4 { color: #f1f5f9 !important; }
         [data-theme="dark-glass"] .putme-action-card p  { color: rgba(255,255,255,0.48) !important; }
-        [data-theme="dark-glass"] .putme-action-card:hover {
-            background: rgba(255,255,255,0.11) !important;
-            border-color: rgba(255,255,255,0.2) !important;
-            transform: translateY(-3px);
-        }
-
         [data-theme="light-glass"] .putme-action-card {
             background: rgba(255,255,255,0.68) !important;
-            backdrop-filter: blur(16px) !important;
-            -webkit-backdrop-filter: blur(16px) !important;
             border-color: rgba(255,255,255,0.55) !important;
-            box-shadow: 0 4px 20px rgba(99,102,241,0.09) !important;
         }
         [data-theme="light-glass"] .putme-action-card h4 { color: #0f172a !important; }
         [data-theme="light-glass"] .putme-action-card p  { color: #475569 !important; }

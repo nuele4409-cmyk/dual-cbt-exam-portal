@@ -14473,19 +14473,12 @@
             if (sb) sb.disabled = false;
         }
 
-        async function saveUniversity() {
+        function saveUniversity() {
             if (!_selectedUni) return;
             var btn = document.getElementById('save-uni-btn');
             var msg = document.getElementById('uni-save-msg');
-            if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-            if (_postSupabase && window._authUser) {
-                try {
-                    await _postSupabase.from('profiles')
-                        .update({ selected_university: _selectedUni })
-                        .eq('id', window._authUser.id);
-                    if (window._authProfile) window._authProfile.selected_university = _selectedUni;
-                } catch (e) { console.warn('Uni save failed:', e.message); }
-            }
+
+            // Update UI immediately — don't wait for the network call
             var uniNames = {};
             _NIGERIAN_UNIVERSITIES.forEach(function(u){ uniNames[u.code] = u.code + ' — ' + u.name; });
             var ud = document.getElementById('putme-uni-display');
@@ -14493,11 +14486,21 @@
             var cb = document.getElementById('change-uni-btn');
             if (cb) cb.style.display = 'inline-block';
             if (msg) { msg.style.display = 'block'; setTimeout(function () { msg.style.display = 'none'; }, 2000); }
-            if (btn) { btn.textContent = 'Save University'; }
+            if (btn) { btn.disabled = true; btn.textContent = 'Saved ✓'; setTimeout(function(){ if(btn){ btn.textContent = 'Save University'; btn.disabled = false; } }, 2500); }
             var uc = document.getElementById('uni-select-card');
             var ag = document.getElementById('putme-action-grid');
             if (uc) uc.style.display = 'none';
             if (ag) { ag.style.display = 'block'; loadGameStats(); }
+
+            // Persist to Supabase in the background (fire-and-forget)
+            if (_postSupabase && window._authUser) {
+                if (window._authProfile) window._authProfile.selected_university = _selectedUni;
+                _postSupabase.from('profiles')
+                    .update({ selected_university: _selectedUni })
+                    .eq('id', window._authUser.id)
+                    .then(function() {})
+                    .catch(function(e) { console.warn('Uni save failed:', e.message); });
+            }
         }
 
         function _updateSavedSubjectsBar(subjects) {

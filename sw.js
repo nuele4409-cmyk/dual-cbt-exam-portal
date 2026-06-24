@@ -6,7 +6,7 @@
 //    • Fallback: serve cached index.html when offline
 // ─────────────────────────────────────────────────────────────
 
-const CACHE = 'insideoau-cbt-v6';
+const CACHE = 'insideoau-cbt-v7';
 
 const PRECACHE = [
   '/',

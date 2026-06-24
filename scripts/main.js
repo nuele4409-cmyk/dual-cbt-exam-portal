@@ -13845,6 +13845,30 @@
         window.utmeToggleSubject    = utmeToggleSubject;
         window.showUtmeHome         = showUtmeHome;
 
+        // ── Expose Post-UTME functions called via inline onclick ─────────
+        window.enterPostUtmePortal      = enterPostUtmePortal;
+        window.showPostUtmeHome         = showPostUtmeHome;
+        window.backToPutmeHome          = backToPutmeHome;
+        window.changeUniversity         = changeUniversity;
+        window.selectUniversity         = selectUniversity;
+        window.saveUniversity           = saveUniversity;
+        window.openSubjectModal         = openSubjectModal;
+        window.openChangeSubjectsModal  = openChangeSubjectsModal;
+        window.closeSubjectModal        = closeSubjectModal;
+        window.toggleSubject            = toggleSubject;
+        window.confirmSubjectsAndStart  = confirmSubjectsAndStart;
+        window.openClassroomPortal      = openClassroomPortal;
+        window.startSprintChallenge     = startSprintChallenge;
+        window.openDuelLobby            = openDuelLobby;
+        window.openLeaderboard          = openLeaderboard;
+        window.openAnalyticsHub         = openAnalyticsHub;
+        window.openMyHistory            = openMyHistory;
+        window._showActivationModal     = _showActivationModal;
+        window._requirePutmeAccess      = _requirePutmeAccess;
+        window._redeemModalCode         = _redeemModalCode;
+        window._showPutmeActivation     = _showPutmeActivation;
+        window.redeemActivationCode     = redeemActivationCode;
+
         // Hard-wire the ← Portal button via JS as well (belt-and-suspenders for desktop)
         document.addEventListener('DOMContentLoaded', function() {
             var _backBtn = document.querySelector('#utme-hero-bar .back-to-portal');

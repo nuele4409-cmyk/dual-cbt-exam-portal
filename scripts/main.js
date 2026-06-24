@@ -13241,6 +13241,15 @@
                 });
             }
 
+            // If profile exists but student_id is missing, generate + patch it now
+            if (profile && !profile.student_id) {
+                var newSid = 'IOAU-' + String(1000 + Math.floor(Math.random() * 9000)).padStart(4, '0');
+                profile.student_id = newSid;
+                _postSupabase.from('profiles')
+                    .update({ student_id: newSid })
+                    .eq('id', user.id).then(function(){}).catch(function(){});
+            }
+
             window._authProfile = profile;
             window._authInProgress = false;
             if (profile && profile.is_admin) showAdminFab();

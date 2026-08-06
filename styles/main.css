@@ -3459,6 +3459,17 @@
             border-color: rgba(var(--th-primary-rgb), 0.25);
         }
 
+        /* Hide the floating calculator (button + box) while either admin dashboard
+           is open — its z-index sits above them so it was covering admin controls. */
+        body:has(#utme-admin-panel.active) button[onclick="toggleCalc()"]:not(.utme-calc-close),
+        body:has(#admin-panel.active) button[onclick="toggleCalc()"]:not(.utme-calc-close) {
+            display: none !important;
+        }
+        body:has(#utme-admin-panel.active) #simple-calc-box,
+        body:has(#admin-panel.active) #simple-calc-box {
+            display: none !important;
+        }
+
         /* Floating calc button glow */
         #utme-screen ~ button[onclick="toggleCalc()"],
         button[onclick="toggleCalc()"] {

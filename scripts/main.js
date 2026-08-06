@@ -16812,23 +16812,43 @@
             document.getElementById('adm-upload-msg').style.display = 'none';
         }
 
+        function adminCancelCSVPreview() {
+            document.getElementById('adm-csv-preview-section').style.display = 'none';
+            _csvRows = [];
+        }
+
         async function adminUploadQuestions() {
             if (!_csvRows || _csvRows.length === 0) { alert('No questions to upload.'); return; }
             if (!_postSupabase) { alert('Database not connected.'); return; }
+            var uploadBtn = document.getElementById('adm-upload-btn');
+            if (uploadBtn) { uploadBtn.disabled = true; uploadBtn.textContent = 'Uploading\u2026'; }
             var msgEl = document.getElementById('adm-upload-msg');
-            msgEl.style.display='block'; msgEl.style.color='#555'; msgEl.textContent='Uploading '+_csvRows.length+' questions\u2026';
+            var totalToUpload = _csvRows.length;
+            msgEl.style.display='block'; msgEl.style.color='#555'; msgEl.textContent='Uploading '+totalToUpload+' questions\u2026';
             try {
                 var batchSize = 50, total = 0;
-                for (var i = 0; i < _csvRows.length; i += batchSize) {
-                    var batch = _csvRows.slice(i, i+batchSize);
+                while (_csvRows.length > 0) {
+                    var batch = _csvRows.slice(0, batchSize);
                     var res = await _postSupabase.from('question_bank').insert(batch);
-                    if (res.error) { msgEl.style.color='#c00'; msgEl.textContent='Error: '+res.error.message; return; }
+                    if (res.error) {
+                        msgEl.style.color='#c00'; msgEl.textContent='Error: '+res.error.message;
+                        if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = '\u2b06\ufe0f Upload to Question Bank'; }
+                        return;
+                    }
+                    // Remove the uploaded batch immediately so a retry after a later
+                    // failure can't re-insert rows that already made it to the DB.
+                    _csvRows.splice(0, batch.length);
                     total += batch.length;
-                    msgEl.textContent='Uploaded '+total+'/'+_csvRows.length+'\u2026';
+                    msgEl.textContent='Uploaded '+total+'/'+totalToUpload+'\u2026';
                 }
                 msgEl.style.color='#28a745'; msgEl.textContent='\u2705 '+total+' questions uploaded successfully!';
-                _csvRows = [];
-            } catch(e) { msgEl.style.color='#c00'; msgEl.textContent='Failed: '+e.message; }
+                document.getElementById('adm-csv-text').value = '';
+                document.getElementById('adm-csv-preview-section').style.display = 'none';
+                if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = '\u2b06\ufe0f Upload to Question Bank'; }
+            } catch(e) {
+                msgEl.style.color='#c00'; msgEl.textContent='Failed: '+e.message;
+                if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = '\u2b06\ufe0f Upload to Question Bank'; }
+            }
         }
 
         // ── Activation Code Generator ──────────────────────────────────────

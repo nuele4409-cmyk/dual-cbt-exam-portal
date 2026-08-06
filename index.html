@@ -816,11 +816,11 @@
                             <h3>Preview (<span id="adm-csv-count">0</span> questions)</h3>
                             <div class="csv-preview" id="adm-csv-preview"></div>
                             <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
-                                <button class="admin-create-btn" style="background:#0056b3;"
+                                <button class="admin-create-btn" id="adm-upload-btn" style="background:#0056b3;"
                                     onclick="adminUploadQuestions()">⬆️ Upload to Question Bank</button>
                                 <button class="admin-create-btn"
                                     style="background:#6c757d;flex:0 0 auto;width:auto;padding:12px 20px;"
-                                    onclick="document.getElementById('adm-csv-preview-section').style.display='none'">Cancel</button>
+                                    onclick="adminCancelCSVPreview()">Cancel</button>
                             </div>
                             <div id="adm-upload-msg"
                                 style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>

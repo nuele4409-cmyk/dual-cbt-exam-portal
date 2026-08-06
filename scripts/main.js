@@ -12567,6 +12567,10 @@
                     examSnapshot: examData       // full question set snapshot
                 });
             }
+            // Streaks/badges live on the shared profile — award them the same way
+            // Post-UTME does after its own exam submit.
+            var _examPct = totalQuestions > 0 ? Math.round((totalScore / totalQuestions) * 100) : 0;
+            updateStreakAfterExam(_examPct);
             // ── Do NOT clear session here — only unlockAndSubmit() clears it ──
             // This prevents students from resuming a finished exam, while still
             // allowing them to see their result if they refresh before submitting.
@@ -12731,20 +12735,25 @@
         function toggleCalc() { let c = document.getElementById('simple-calc-box'); c.style.display = c.style.display === 'block' ? 'none' : 'block'; }
 
         function showUtmeHome() {
+            var profileOverlay = document.getElementById('profile-overlay');
+            if (profileOverlay) profileOverlay.remove();
             // Hide exam/result/history views
             var quiz = document.getElementById('quiz-interface');
             var result = document.getElementById('result-interface');
             var resultAlt = document.getElementById('result-interface-alt');
             var history = document.getElementById('history-card');
+            var historyModal = document.getElementById('history-modal');
             if (quiz) quiz.style.display = 'none';
             if (result) result.style.display = 'none';
             if (resultAlt) { resultAlt.style.display = 'none'; resultAlt.innerHTML = ''; }
             if (history) history.style.display = 'none';
+            if (historyModal) historyModal.style.display = 'none';
             // Show home view, hide mode panel
             var homeView = document.getElementById('utme-home-view');
             if (homeView) homeView.classList.remove('hidden');
             var modePanel = document.getElementById('utme-mode-panel');
             if (modePanel) modePanel.classList.remove('active');
+            loadGameStats();
         }
 
         function openUtmeMockMode() {
@@ -13824,8 +13833,11 @@
                 } else if (tab === 'scores') {
                     showUtmeHome();
                     loadExamHistory().then(function() {
+                        // Guard against a race: if the user has since navigated to
+                        // another tab, this stale callback must not pop history back up.
+                        var navScores = document.getElementById('nav-scores');
                         var hc = document.getElementById('history-card');
-                        if (hc) {
+                        if (hc && navScores && navScores.classList.contains('active')) {
                             hc.style.display = 'block';
                             hc.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
@@ -13837,13 +13849,120 @@
         }
 
         function _navShowProfile() {
+            var old = document.getElementById('profile-overlay');
+            if (old) old.remove();
             var user = window._authUser;
+            if (!user) { alert('Please sign in to view your profile.'); return; }
             var profile = window._authProfile;
-            var name  = (profile && profile.full_name) || (user && user.user_metadata && user.user_metadata.full_name) || 'Student';
-            var sid   = (profile && profile.student_id) || '—';
-            var email = (user && user.email) || '—';
-            if (window.confirm(name + '\n' + sid + '\n' + email + '\n\nSign out?')) doSignOut();
+
+            var name  = (profile && profile.full_name) || (user.user_metadata && user.user_metadata.full_name) || 'Student';
+            var sid   = (profile && profile.student_id) || getOrGenerateID();
+            var email = user.email || '—';
+            var uniCode = profile && profile.selected_university;
+            var uniName = 'Not selected yet';
+            if (uniCode) {
+                var uniMatch = _NIGERIAN_UNIVERSITIES.find(function(u){ return u.code === uniCode; });
+                uniName = uniMatch ? (uniMatch.code + ' — ' + uniMatch.name) : uniCode;
+            }
+            var subjectIds = (profile && profile.post_utme_subjects) || [];
+            var subjectLabels = subjectIds.map(function(id) {
+                var s = PUTME_SUBJECTS.find(function(x){ return x.id === id; });
+                return s ? s.label : id;
+            });
+            var streak = (profile && profile.streak_count) || 0;
+            var earnedBadges = (profile && profile.badges) || [];
+            var hasAccess = !!window._putmeHasAccess;
+            var initials = name.trim().split(' ').filter(Boolean).map(function(p){ return p[0]; }).slice(0,2).join('').toUpperCase() || '?';
+
+            var badgesHtml = BADGES_DEF.map(function(b) {
+                var got = earnedBadges.indexOf(b.id) !== -1;
+                return '<div title="' + b.desc + '" style="text-align:center;padding:12px 6px;border-radius:12px;background:' + (got ? '#fff' : '#f1f1f4') + ';opacity:' + (got ? '1' : '0.45') + ';box-shadow:' + (got ? '0 1px 4px rgba(0,0,0,0.08)' : 'none') + ';">' +
+                    '<div style="font-size:1.6rem;">' + b.icon + '</div>' +
+                    '<div style="font-size:0.7rem;font-weight:700;color:#1a2742;margin-top:4px;">' + b.label + '</div>' +
+                '</div>';
+            }).join('');
+
+            var subjectsHtml = subjectLabels.length
+                ? subjectLabels.map(function(l) { return '<span style="display:inline-block;background:#eef2ff;color:#4338ca;padding:4px 10px;border-radius:20px;font-size:0.78rem;font-weight:600;margin:3px 4px 0 0;">' + l + '</span>'; }).join('')
+                : '<span style="color:#999;font-size:0.85rem;">No subjects selected yet</span>';
+
+            var overlay = document.createElement('div');
+            overlay.id = 'profile-overlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg,#f4f7fb);z-index:99999;overflow-y:auto;';
+
+            var header = document.createElement('div');
+            header.style.cssText = 'background:linear-gradient(135deg,#1a2742,#4f46e5);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;';
+            header.innerHTML = '<h2 style="margin:0;font-size:1.2rem;">👤 My Profile</h2>';
+            var backBtn = document.createElement('button');
+            backBtn.textContent = '← Back';
+            backBtn.style.cssText = 'background:rgba(255,255,255,0.15);border:none;color:#fff;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:0.85rem;';
+            backBtn.onclick = function(){ var el = document.getElementById('profile-overlay'); if (el) el.remove(); };
+            header.appendChild(backBtn);
+
+            var body = document.createElement('div');
+            body.style.cssText = 'max-width:520px;margin:0 auto;padding:24px 16px 60px;';
+            body.innerHTML =
+                '<div style="text-align:center;margin-bottom:20px;">' +
+                    '<div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#818cf8);color:#fff;font-weight:800;font-size:1.6rem;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">' + initials + '</div>' +
+                    '<div style="font-weight:800;font-size:1.15rem;color:#1a2742;">' + name + '</div>' +
+                    '<div style="color:#888;font-size:0.85rem;margin-top:2px;">' + email + '</div>' +
+                    '<div style="display:inline-block;margin-top:8px;background:#1a2742;color:#fff;padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;">' + sid + '</div>' +
+                '</div>' +
+
+                '<div style="display:flex;gap:10px;margin-bottom:20px;">' +
+                    '<div style="flex:1;background:#fff;border-radius:12px;padding:14px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">' +
+                        '<div style="font-size:1.4rem;">🔥</div><div style="font-weight:800;font-size:1.1rem;color:#1a2742;">' + streak + '</div><div style="font-size:0.72rem;color:#888;">Day Streak</div>' +
+                    '</div>' +
+                    '<div style="flex:1;background:#fff;border-radius:12px;padding:14px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">' +
+                        '<div style="font-size:1.4rem;">🏅</div><div style="font-weight:800;font-size:1.1rem;color:#1a2742;">' + earnedBadges.length + '/' + BADGES_DEF.length + '</div><div style="font-size:0.72rem;color:#888;">Badges</div>' +
+                    '</div>' +
+                    '<div style="flex:1;background:#fff;border-radius:12px;padding:14px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">' +
+                        '<div style="font-size:1.4rem;">' + (hasAccess ? '⭐' : '🔒') + '</div><div style="font-weight:800;font-size:0.85rem;color:#1a2742;">' + (hasAccess ? 'Premium' : 'Preview') + '</div><div style="font-size:0.72rem;color:#888;">Access</div>' +
+                    '</div>' +
+                '</div>' +
+
+                '<div style="background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+                        '<div><div style="font-size:0.72rem;color:#888;font-weight:700;text-transform:uppercase;">University</div><div style="font-weight:700;color:#1a2742;margin-top:2px;">🏫 ' + uniName + '</div></div>' +
+                        '<button onclick="_profileChangeUniversity()" style="background:#eef2ff;color:#4338ca;border:none;padding:6px 14px;border-radius:20px;font-size:0.78rem;font-weight:700;cursor:pointer;">Change</button>' +
+                    '</div>' +
+                '</div>' +
+
+                '<div style="background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+                        '<div style="font-size:0.72rem;color:#888;font-weight:700;text-transform:uppercase;">Subjects</div>' +
+                        '<button onclick="_profileChangeSubjects()" style="background:#eef2ff;color:#4338ca;border:none;padding:6px 14px;border-radius:20px;font-size:0.78rem;font-weight:700;cursor:pointer;">Change</button>' +
+                    '</div>' +
+                    '<div>' + subjectsHtml + '</div>' +
+                '</div>' +
+
+                '<div style="margin-bottom:20px;">' +
+                    '<div style="font-size:0.72rem;color:#888;font-weight:700;text-transform:uppercase;margin-bottom:8px;">Badges</div>' +
+                    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">' + badgesHtml + '</div>' +
+                '</div>' +
+
+                (hasAccess ? '' : '<button onclick="_showActivationModal(\'Profile\')" style="width:100%;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;padding:12px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;margin-bottom:14px;">🔓 Activate Full Access</button>') +
+
+                '<button onclick="if(window.confirm(\'Sign out of your account?\')) doSignOut();" style="width:100%;background:#fff;color:#dc3545;border:1px solid #f1c0c6;padding:12px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;">⎋ Sign Out</button>';
+
+            overlay.appendChild(header);
+            overlay.appendChild(body);
+            document.body.appendChild(overlay);
         }
+
+        function _profileChangeUniversity() {
+            var el = document.getElementById('profile-overlay');
+            if (el) el.remove();
+            changeUniversity();
+        }
+        window._profileChangeUniversity = _profileChangeUniversity;
+
+        function _profileChangeSubjects() {
+            var el = document.getElementById('profile-overlay');
+            if (el) el.remove();
+            openChangeSubjectsModal();
+        }
+        window._profileChangeSubjects = _profileChangeSubjects;
         window.bottomNavGo = bottomNavGo;
 
         // ── Expose UTME functions called via inline onclick ──────────────
@@ -13892,8 +14011,39 @@
             }
         });
 
+        // Temporary switch: flip to false to reopen the UTME Portal. While true,
+        // enterUtmePortal() blocks entry and the portal-selector card shows as locked.
+        var UTME_PORTAL_LOCKED = true;
+
+        function _applyUtmePortalLockState() {
+            var card = document.querySelector('.portal-card[onclick="enterUtmePortal()"]');
+            if (!card) return;
+            var badge = card.querySelector('.portal-badge');
+            var btn = card.querySelector('.portal-enter-btn');
+            if (UTME_PORTAL_LOCKED) {
+                card.style.opacity = '0.55';
+                card.style.filter = 'grayscale(0.4)';
+                card.style.cursor = 'not-allowed';
+                if (badge) { badge.textContent = '🔒 COMING SOON'; }
+                if (btn) { btn.textContent = 'Currently Unavailable'; }
+            } else {
+                card.style.opacity = '';
+                card.style.filter = '';
+                card.style.cursor = '';
+                if (badge) { badge.textContent = 'JAMB CBT'; }
+                if (btn) { btn.textContent = 'Enter Portal →'; }
+            }
+        }
+        // Called directly (not via DOMContentLoaded) — this script tag sits at the
+        // end of <body>, so the DOM (including .portal-card) is already parsed by now.
+        _applyUtmePortalLockState();
+
         // ── Enter UTME Portal ─────────────────────────────────────────────
         function enterUtmePortal() {
+            if (UTME_PORTAL_LOCKED) {
+                alert('🔒 The UTME Portal is temporarily unavailable. Please check back soon!');
+                return;
+            }
             if (window._dismissRefreshBanner) window._dismissRefreshBanner();
             var _ps = document.getElementById('portal-selector');
             if (_ps) { _ps.classList.remove('visible'); _ps.style.display = ''; }
@@ -13921,6 +14071,9 @@
             var dispFirst = fullName ? (fullName.split(' ')[0]) : 'Student';
             if (heroName) heroName.textContent = 'Welcome, ' + dispFirst + ' 👋';
             if (heroId)   heroId.textContent   = (profile && profile.student_id) || getOrGenerateID();
+
+            // Streak/badges chip bar (shared profile — same data as Post-UTME's gami bar)
+            loadGameStats();
 
             // Show UTME admin FAB for admin users (is_admin flag OR hardcoded admin email — matches openUtmeAdminPanel check)
             var _UTME_ADMIN_EMAIL = 'nuele4409@gmail.com';
@@ -14605,14 +14758,43 @@
             updateSubjectCount();
         }
 
+        // Builds one "questions for {subject}" number input per currently
+        // selected/locked subject chip (mirrors UTME's updatePracticeInputs()
+        // per-subject pattern). Preserves any value the student already typed
+        // for a subject that's still selected.
+        function _buildPracticeQCountInputs() {
+            var inputsDiv = document.getElementById('putme-practice-q-inputs');
+            if (!inputsDiv) return;
+            var prevValues = {};
+            inputsDiv.querySelectorAll('input[data-subject]').forEach(function(inp) {
+                prevValues[inp.dataset.subject] = inp.value;
+            });
+            var subjectIds = [];
+            document.querySelectorAll('#subject-chip-list .subject-chip.locked, #subject-chip-list .subject-chip.selected').forEach(function(el) {
+                subjectIds.push(el.id.replace('chip-', ''));
+            });
+            inputsDiv.innerHTML = subjectIds.map(function(id) {
+                var s = PUTME_SUBJECTS.find(function(x){ return x.id === id; });
+                var label = s ? s.label : id;
+                var val = prevValues[id] || 15;
+                return '<div><label style="font-size:0.78rem;color:#1a2742;display:block;margin-bottom:2px;">' + label + '</label>' +
+                    '<input type="number" min="1" value="' + val + '" data-subject="' + id + '" id="putme-count-' + id + '" ' +
+                    'style="width:100%;box-sizing:border-box;padding:0.4rem 0.5rem;border:1px solid #c0cfe8;border-radius:8px;font-size:0.85rem;"></div>';
+            }).join('');
+        }
+
         function openSubjectModal(mode) {
             if (!_selectedUni) { alert('Please select and save your university first.'); return; }
             _pendingExamMode = mode;
             var savedSubjects = (window._authProfile && window._authProfile.post_utme_subjects) || [];
             _buildSubjectChips(savedSubjects);
+            if (mode === 'practice') _buildPracticeQCountInputs();
 
-            // Skip the picker if subjects are already saved — jump straight into the exam
-            if (savedSubjects.length >= 4 && !_subjectChangeMode) {
+            // Skip the picker only for Mock mode when subjects are already saved — there's
+            // nothing left to configure there (question count is admin-set per event).
+            // Practice mode always shows the picker so the student can set question counts
+            // per subject, even when their 4 subjects are already saved from before.
+            if (mode === 'mock' && savedSubjects.length >= 4 && !_subjectChangeMode) {
                 confirmSubjectsAndStart();
                 return;
             }
@@ -14668,6 +14850,8 @@
                 chip.querySelector('.chip-check').textContent = '✓';
             }
             updateSubjectCount();
+            var _qRow = document.getElementById('putme-q-count-row');
+            if (_qRow && _qRow.style.display !== 'none') _buildPracticeQCountInputs();
         }
 
         function updateSubjectCount() {
@@ -14729,9 +14913,15 @@
 
             // Capture mode BEFORE closeSubjectModal() nulls _pendingExamMode
             var _launchMode = _pendingExamMode || 'practice';
-            // Store practice question count chosen by student
-            var _pqEl = document.getElementById('putme-practice-q-count');
-            _putme.practiceQCount = (_pqEl && _launchMode === 'practice') ? (parseInt(_pqEl.value) || 15) : 15;
+            // Store the per-subject question counts chosen by the student
+            var _qCounts = {};
+            if (_launchMode === 'practice') {
+                subjects.forEach(function(sub) {
+                    var el = document.getElementById('putme-count-' + sub);
+                    _qCounts[sub] = (el && parseInt(el.value)) || 15;
+                });
+            }
+            _putme.practiceQCounts = _qCounts;
             closeSubjectModal();
 
             // If the user reached this modal via joinMockExam (subjects weren't set yet),
@@ -14769,15 +14959,17 @@
             document.getElementById('putme-num-grid').innerHTML = '';
 
             // Fetch questions from Supabase
-            // mock: admin-set per scheduled mock (or 20 default); practice: student-chosen count
-            var questionsPerSubject = (mode === 'mock')
-                ? (_putme.questionsPerSubject || 20)
-                : (_putme.practiceQCount    || 15);
+            // mock: admin-set per scheduled mock (or 20 default) applied to every subject;
+            // practice: student-chosen count, independently per subject.
+            var mockQuestionsPerSubject = _putme.questionsPerSubject || 20;
             var allQuestions = [];
 
             if (_postSupabase) {
                 for (var i = 0; i < subjects.length; i++) {
                     var sub = subjects[i];
+                    var questionsPerSubject = (mode === 'mock')
+                        ? mockQuestionsPerSubject
+                        : ((_putme.practiceQCounts && _putme.practiceQCounts[sub]) || 15);
                     try {
                         // Fetch a large pool then randomly pick questionsPerSubject
                         var res = await _postSupabase
@@ -15450,21 +15642,35 @@
             timerInterval:null, timeLeft:180, finished:false
         };
 
+        // Both portals share one profile (window._authProfile, on the Post-UTME
+        // Supabase project) \u2014 render the same streak/badge data into whichever
+        // portal's gami-bar elements exist on the page (ids prefixed 'utme-' for
+        // the UTME portal, unprefixed for Post-UTME).
+        var _GAMI_BAR_ID_SETS = [
+            { bar:'gami-bar',      streak:'streak-num',      row:'badges-row',      rankPill:'rank-pill',      rankNum:'rank-num' },
+            { bar:'utme-gami-bar', streak:'utme-streak-num', row:'utme-badges-row', rankPill:'utme-rank-pill', rankNum:'utme-rank-num' }
+        ];
+
         function loadGameStats() {
             var profile = window._authProfile;
             if (!profile) return;
             var streak = profile.streak_count || 0;
             var earned = profile.badges || [];
-            document.getElementById('streak-num').textContent = streak;
-            var row = document.getElementById('badges-row');
-            if (!row) return;
-            row.innerHTML = earned.length === 0
+            var badgesHTML = earned.length === 0
                 ? '<span style="font-size:0.78rem;opacity:0.7;">No badges yet \u2014 keep going!</span>'
                 : earned.map(function(bid) {
                     var def = BADGES_DEF.find(function(b){ return b.id === bid; });
                     return def ? '<div class="badge-chip" title="' + def.desc + '">' + def.icon + ' ' + def.label + '</div>' : '';
                 }).join('');
-            document.getElementById('gami-bar').style.display = 'flex';
+            _GAMI_BAR_ID_SETS.forEach(function(ids) {
+                var bar = document.getElementById(ids.bar);
+                var row = document.getElementById(ids.row);
+                var streakEl = document.getElementById(ids.streak);
+                if (!bar || !row || !streakEl) return;
+                streakEl.textContent = streak;
+                row.innerHTML = badgesHTML;
+                bar.style.display = 'flex';
+            });
             fetchUserRank();
             loadMockEvents();
         }
@@ -15882,27 +16088,228 @@
             document.body.appendChild(overlay);
             try {
                 var res = await _postSupabase.from('post_utme_exams')
-                    .select('university, subjects, exam_mode, score, total_questions, time_taken, created_at')
+                    .select('id, university, subjects, exam_mode, score, total_questions, time_taken, created_at, raw_data')
                     .eq('student_id', window._authUser.id)
                     .order('created_at', { ascending:false }).limit(30);
                 var rows = (res && res.data) ? res.data : [];
                 if (rows.length === 0) {
                     body.innerHTML = '<div style="text-align:center;padding:40px;color:#888;">No exams taken yet. Start a Mock Exam!</div>'; return;
                 }
-                body.innerHTML = rows.map(function(r) {
+
+                // Cache rows by id so the "Review Corrections" button (and the Phase 3
+                // review view) can look up the full raw_data without re-querying.
+                window._putmeHistoryCache = {};
+                rows.forEach(function(r) { window._putmeHistoryCache[r.id] = r; });
+
+                // \u2550\u2550 Analytics summary \u2014 pushes the exam list down, metrics/chart are
+                // computed from these same real rows (no placeholder data needed). \u2550\u2550
+                var dashboardHTML = _buildHistoryDashboardHTML(rows);
+
+                var listHTML = rows.map(function(r) {
                     var pct   = r.total_questions > 0 ? Math.round((r.score/r.total_questions)*100) : 0;
-                    var color = pct >= 70 ? '#28a745' : pct >= 50 ? '#0056b3' : '#dc3545';
+                    // Phase 2 color coding: red <40%, yellow 40\u201369%, green 70%+
+                    var color = pct >= 70 ? '#22c55e' : pct >= 40 ? '#eab308' : '#ef4444';
                     var date  = new Date(r.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
                     var m = Math.floor((r.time_taken||0)/60), s = (r.time_taken||0)%60;
-                    return '<div style="background:#fff;border-radius:12px;padding:14px 18px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.07);display:flex;align-items:center;gap:14px;">' +
+                    return '<div class="putme-hist-card" style="background:#fff;border-radius:12px;padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">' +
                         '<div style="font-size:2rem;font-weight:900;color:' + color + ';min-width:52px;text-align:center;">' + pct + '%</div>' +
                         '<div style="flex:1;"><div style="font-weight:700;color:#1a2742;font-size:0.95rem;">' + r.university + ' \u00b7 ' + (r.exam_mode==='mock'?'Mock Exam':'Practice') + '</div>' +
                         '<div style="font-size:0.78rem;color:#888;margin-top:2px;">' + (r.subjects||[]).join(', ') + '</div>' +
                         '<div style="font-size:0.75rem;color:#aaa;margin-top:2px;">' + date + ' \u00b7 ' + m + 'm ' + s + 's</div></div>' +
-                        '<div style="text-align:right;"><div style="font-size:1rem;font-weight:700;color:' + color + ';">' + r.score + '/' + r.total_questions + '</div></div></div>';
+                        '<div style="text-align:right;">' +
+                            '<div style="font-size:1rem;font-weight:700;color:' + color + ';">' + r.score + '/' + r.total_questions + '</div>' +
+                            '<button class="putme-hist-review-btn" onclick="openPutmeExamReview(\'' + r.id + '\')">Review Corrections \u2794</button>' +
+                        '</div></div>';
                 }).join('');
+
+                body.innerHTML = dashboardHTML + listHTML;
+                setTimeout(_renderHistoryChart, 100);
             } catch(e) { body.innerHTML = '<div style="text-align:center;padding:40px;color:#888;">Could not load history.</div>'; }
         }
+
+        // \u2500\u2500 Phase 1: Analytics dashboard for My Exam History \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // Metrics/chart are computed from the student's real post_utme_exams rows
+        // (this screen is already wired to Supabase, so no dummy data is used).
+        function _buildHistoryDashboardHTML(rows) {
+            // Average score % across all attempts
+            var pcts = rows.map(function(r) { return r.total_questions > 0 ? (r.score / r.total_questions) * 100 : 0; });
+            var avgPct = Math.round(pcts.reduce(function(a, b) { return a + b; }, 0) / pcts.length);
+
+            // Strongest subject \u2014 aggregate per-subject correct/total from every exam's
+            // stored raw_data.subject_scores, then take the highest overall percentage.
+            var subjectTotals = {};
+            rows.forEach(function(r) {
+                var ss = r.raw_data && r.raw_data.subject_scores;
+                if (!ss) return;
+                Object.keys(ss).forEach(function(subj) {
+                    if (!subjectTotals[subj]) subjectTotals[subj] = { correct: 0, total: 0 };
+                    subjectTotals[subj].correct += ss[subj].correct || 0;
+                    subjectTotals[subj].total   += ss[subj].total || 0;
+                });
+            });
+            var strongestSubject = null, bestSubjectPct = -1;
+            Object.keys(subjectTotals).forEach(function(subj) {
+                var t = subjectTotals[subj];
+                if (t.total === 0) return;
+                var p = (t.correct / t.total) * 100;
+                if (p > bestSubjectPct) { bestSubjectPct = p; strongestSubject = subj; }
+            });
+            var strongestLabel = strongestSubject ? (strongestSubject.charAt(0).toUpperCase() + strongestSubject.slice(1)) : '\u2014';
+
+            // Score-progression series \u2014 chronological (oldest \u2192 newest), last 20 attempts
+            var chrono = rows.slice(0, 20).reverse();
+            var chartLabels = chrono.map(function(r) { return new Date(r.created_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short' }); });
+            var chartScores = chrono.map(function(r) { return r.total_questions > 0 ? Math.round((r.score / r.total_questions) * 100) : 0; });
+
+            var canvasId = 'history-trend-chart-' + Date.now();
+            window._pendingHistoryChartData = { canvasId: canvasId, labels: chartLabels, scores: chartScores };
+
+            function metricCard(icon, label, value) {
+                return '<div style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.07);">' +
+                    '<div style="font-size:1.4rem;">' + icon + '</div>' +
+                    '<div style="font-size:1.35rem;font-weight:900;color:#1a2742;margin:4px 0;word-break:break-word;">' + value + '</div>' +
+                    '<div style="font-size:0.66rem;color:#888;text-transform:uppercase;letter-spacing:0.05em;">' + label + '</div>' +
+                    '</div>';
+            }
+
+            return '<div style="margin-bottom:20px;">' +
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">' +
+                    metricCard('\ud83d\udcca', 'Average Score', avgPct + '%') +
+                    metricCard('\ud83d\udcdd', 'Total Exams Taken', rows.length) +
+                    metricCard('\ud83d\udcaa', 'Strongest Subject', strongestLabel) +
+                '</div>' +
+                '<div style="background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,0.07);">' +
+                    '<div style="font-weight:700;color:#1a2742;margin-bottom:10px;font-size:0.88rem;">\ud83d\udcc8 Score Progression</div>' +
+                    '<div style="position:relative;height:180px;">' +
+                        '<canvas id="' + canvasId + '"></canvas>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }
+
+        function _renderHistoryChart() {
+            if (!window._pendingHistoryChartData) return;
+            var d = window._pendingHistoryChartData;
+            var canvas = document.getElementById(d.canvasId);
+            if (!canvas) return;
+            window._pendingHistoryChartData = null;
+            new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: d.labels,
+                    datasets: [{
+                        label: 'Score %',
+                        data: d.scores,
+                        borderColor: '#0056b3',
+                        backgroundColor: 'rgba(0,86,179,0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        pointBackgroundColor: '#0056b3',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y + '%'; } } }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, max: 100, ticks: { callback: function(v) { return v + '%'; }, stepSize: 20 }, grid: { color: '#f0f0f0' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // ── Phase 3: Corrections & Insights view ────────────────────────────
+        // Wired to the "Review Corrections ➔" button on each history card.
+        // Reads the exam's own raw_data (saved at submit time in submitPutmeExam):
+        //   raw_data.questions       — flat array, each {subject, question, options, answer(0-3), explanation}
+        //   raw_data.answers         — { questionIndex: 'A'|'B'|'C'|'D' }
+        //   raw_data.subject_scores  — { subject: {correct, total} }
+        function openPutmeExamReview(examId) {
+            var row = window._putmeHistoryCache && window._putmeHistoryCache[examId];
+            if (!row) { alert('Could not find this exam attempt.'); return; }
+
+            var old = document.getElementById('putme-review-overlay');
+            if (old) old.remove();
+
+            var overlay = document.createElement('div');
+            overlay.id = 'putme-review-overlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg,#f4f7fb);z-index:100002;overflow-y:auto;';
+
+            var header = document.createElement('div');
+            header.style.cssText = 'background:linear-gradient(135deg,#1a2742,#0056b3);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;';
+            var dateLabel = new Date(row.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+            header.innerHTML = '<h2 style="margin:0;font-size:1.2rem;">📝 Review Corrections — ' + dateLabel + '</h2>';
+            var backBtn = document.createElement('button');
+            backBtn.textContent = '← Back';
+            backBtn.style.cssText = 'background:rgba(255,255,255,0.15);border:none;color:#fff;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:0.85rem;';
+            backBtn.onclick = function(){ overlay.remove(); };
+            header.appendChild(backBtn);
+
+            var body = document.createElement('div');
+            body.style.cssText = 'max-width:700px;margin:0 auto;padding:20px 16px;';
+
+            var raw = row.raw_data || {};
+            var questions = raw.questions || [];
+            var answers = raw.answers || {};
+            var subjectScores = raw.subject_scores || {};
+
+            if (questions.length === 0) {
+                body.innerHTML = '<div style="text-align:center;padding:40px;color:#888;">No question data was saved for this attempt.</div>';
+            } else {
+                // ── Subject breakdown layout ──
+                var breakdownHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;">';
+                Object.keys(subjectScores).forEach(function(subj) {
+                    var s = subjectScores[subj];
+                    var pct = s.total > 0 ? Math.round((s.correct / s.total) * 100) : 0;
+                    // Same red/yellow/green thresholds as the history card list (Phase 2)
+                    var bg = pct >= 70 ? '#dcfce7' : pct >= 40 ? '#fef9c3' : '#fee2e2';
+                    var fg = pct >= 70 ? '#15803d' : pct >= 40 ? '#a16207' : '#b91c1c';
+                    breakdownHTML += '<span style="background:' + bg + ';color:' + fg + ';padding:5px 12px;border-radius:20px;font-size:0.82rem;font-weight:700;text-transform:capitalize;">' +
+                        subj + ': ' + s.correct + '/' + s.total + ' (' + pct + '%)</span>';
+                });
+                breakdownHTML += '</div>';
+
+                // ── Question-by-question review layout ──
+                var labels = ['A', 'B', 'C', 'D'];
+                var questionsHTML = questions.map(function(q, i) {
+                    var userAns = answers[i];
+                    var correctLetter = labels[q.answer];
+                    var isCorrect = userAns === correctLetter;
+
+                    var optionsHTML = (q.options || []).map(function(opt, oi) {
+                        var letter = labels[oi];
+                        var style = 'padding:8px 12px;border-radius:8px;margin-bottom:6px;font-size:0.88rem;border:1px solid #e0e0e0;';
+                        if (letter === correctLetter) {
+                            // Correct option — always highlighted green
+                            style += 'background:#dcfce7;border-color:#22c55e;color:#15803d;font-weight:700;';
+                        } else if (letter === userAns && !isCorrect) {
+                            // Student's wrong pick — highlighted red
+                            style += 'background:#fee2e2;border-color:#ef4444;color:#b91c1c;font-weight:700;';
+                        }
+                        return '<div style="' + style + '">' + letter + '. ' + opt + '</div>';
+                    }).join('');
+
+                    return '<div style="background:#fff;border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.07);">' +
+                        '<div style="font-size:0.72rem;color:#888;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">' + (q.subject||'') + ' · Q' + (i + 1) + '</div>' +
+                        '<div style="font-weight:700;color:#1a2742;margin-bottom:10px;">' + (q.question||'') + '</div>' +
+                        optionsHTML +
+                        (q.explanation ? '<div style="margin-top:10px;padding:10px 12px;background:#f0f4ff;border-radius:8px;font-size:0.85rem;color:#333;"><strong>Explanation:</strong> ' + q.explanation + '</div>' : '') +
+                        '</div>';
+                }).join('');
+
+                body.innerHTML = breakdownHTML + questionsHTML;
+            }
+
+            overlay.appendChild(header);
+            overlay.appendChild(body);
+            document.body.appendChild(overlay);
+        }
+        window.openPutmeExamReview = openPutmeExamReview;
 
 
         // ── Performance Analytics Hub ─────────────────────────────────────────
@@ -16851,6 +17258,11 @@
             if (ls) ls.classList.remove('active');
             var ss = document.getElementById('sprint-screen');
             if (ss) ss.classList.remove('active');
+            // Remove any dynamically-created full-screen overlays (History, Analytics, Duel)
+            ['my-hist-overlay', 'analytics-overlay', 'duel-overlay', 'profile-overlay', 'putme-review-overlay'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.remove();
+            });
             // Restore action grid explicitly (startPutmeExam hides it inline)
             var ag = document.getElementById('putme-action-grid');
             if (ag && window._authProfile && window._authProfile.selected_university) {

@@ -454,17 +454,11 @@
                         <p>Choose exactly <strong>4 subjects</strong>. Use of English is compulsory for all
                             universities.</p>
                         <div class="subject-list" id="subject-chip-list"></div>
-                    </div>
-                    <!-- Practice mode: let student pick question count -->
-                    <div id="putme-q-count-row" style="display:none;align-items:center;gap:0.6rem;padding:0.6rem 1.2rem;background:rgba(0,86,179,0.06);border-top:1px solid #e0e8f5;">
-                        <label style="font-size:0.85rem;font-weight:600;color:#1a2742;white-space:nowrap;">Questions per subject:</label>
-                        <select id="putme-practice-q-count" style="border:1px solid #c0cfe8;border-radius:8px;padding:0.3rem 0.6rem;font-size:0.85rem;background:#fff;color:#1a2742;">
-                            <option value="10">10</option>
-                            <option value="15" selected>15</option>
-                            <option value="20">20</option>
-                            <option value="25">25</option>
-                            <option value="30">30</option>
-                        </select>
+                        <!-- Practice mode: let student pick a question count per subject -->
+                        <div id="putme-q-count-row" style="display:none;flex-direction:column;gap:0.5rem;padding:0.6rem 1rem;margin-top:0.5rem;background:rgba(0,86,179,0.06);border-radius:8px;">
+                            <label style="font-size:0.85rem;font-weight:600;color:#1a2742;">Questions per subject:</label>
+                            <div id="putme-practice-q-inputs" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;"></div>
+                        </div>
                     </div>
                     <div class="subject-modal-footer">
                         <div class="subject-count">Selected: <span id="subject-count-num">1</span>/4</div>
@@ -1128,41 +1122,45 @@
         <!-- ══ HOME VIEW (Action cards + channel strip) ═══════════════ -->
         <div id="utme-home-view">
 
-            <!-- Action Cards -->
-            <div id="utme-quickactions-card">
-                <div class="utme-actions-grid">
-                    <div class="utme-action-card" onclick="openUtmeMockMode()">
-                        <div class="uac-icon">🎯</div>
-                        <h4>Mock Exam</h4>
-                        <p>Timed CBT exactly like the real JAMB exam</p>
-                    </div>
-                    <div class="utme-action-card" onclick="openUtmePracticeMode()">
-                        <div class="uac-icon">📝</div>
-                        <h4>Practice Mode</h4>
-                        <p>Custom time &amp; question limits, instant feedback</p>
-                    </div>
-                    <div class="utme-action-card" onclick="openUtmeStudyHub()">
-                        <div class="uac-icon">📚</div>
-                        <h4>Study Hub</h4>
-                        <p>Bite-sized notes per subject &amp; topic</p>
-                    </div>
-                    <div class="utme-action-card" onclick="openUtmeAnalytics()">
-                        <div class="uac-icon">📈</div>
-                        <h4>My Analytics</h4>
-                        <p>Score trends, avg &amp; best across all exams</p>
-                    </div>
-                </div>
+            <!-- Access code banner — Mock Exam needs today's WhatsApp channel code -->
+            <div class="utme-code-banner">
+                <span class="ucb-text">🔑 Need today's Mock Exam code? Get it on our channel.</span>
+                <a href="https://whatsapp.com/channel/0029Vb6sNH4LSmbcGTeawU0q" target="_blank" class="ucb-link">Join Channel</a>
             </div>
 
-            <!-- Channel Strip (blended) -->
-            <div id="utme-channel-strip">
-                <div class="cs-left">
-                    <span>📣</span>
-                    Get today's Access Code on the official channel
+            <!-- Gamification chips -->
+            <div class="putme-gami-chips" id="utme-gami-bar" style="display:none;">
+                <div class="putme-gami-chip"><span class="streak-fire">🔥</span> <span id="utme-streak-num">0</span> day streak</div>
+                <div class="badges-row" id="utme-badges-row"></div>
+                <div class="putme-gami-chip" id="utme-rank-pill" style="display:none;">🏆 Rank #<span id="utme-rank-num">—</span></div>
+            </div>
+
+            <!-- Icon grid -->
+            <div class="putme-icon-grid">
+                <div class="putme-icon-card pic-red" onclick="openUtmeMockMode()">
+                    <div class="pic-icon">🎯</div>
+                    <div class="pic-label">Mock Exam</div>
+                    <div class="pic-sub">Timed · real JAMB format</div>
                 </div>
-                <div class="cs-actions">
-                    <a href="https://whatsapp.com/channel/0029Vb6sNH4LSmbcGTeawU0q" target="_blank" class="cs-btn cs-btn-wa">Join Channel</a>
-                    <button class="cs-btn cs-btn-lb" onclick="document.getElementById('leaderboard-modal').style.display='block'">🏆 Leaderboard</button>
+                <div class="putme-icon-card" onclick="openUtmePracticeMode()">
+                    <div class="pic-icon">📝</div>
+                    <div class="pic-label">Practice</div>
+                    <div class="pic-sub">Custom limits · feedback</div>
+                </div>
+                <div class="putme-icon-card" onclick="openUtmeStudyHub()">
+                    <div class="pic-icon">📚</div>
+                    <div class="pic-label">Study Hub</div>
+                    <div class="pic-sub">Notes per subject</div>
+                </div>
+                <div class="putme-icon-card pic-purple" onclick="openUtmeAnalytics()">
+                    <div class="pic-icon">📈</div>
+                    <div class="pic-label">Analytics</div>
+                    <div class="pic-sub">Score trends</div>
+                </div>
+                <div class="putme-icon-card pic-gold" onclick="document.getElementById('leaderboard-modal').style.display='block'">
+                    <div class="pic-icon">🏆</div>
+                    <div class="pic-label">Leaderboard</div>
+                    <div class="pic-sub">Top 50 ranking</div>
                 </div>
             </div>
 
@@ -1248,19 +1246,23 @@
         <div id="auth-gate" style="display:none;"></div>
 
         <!-- ══ MY EXAM HISTORY ══════════════════════════════════════════════ -->
-        <div id="history-card" class="card" style="display:none;">
-            <button class="hub-back-btn" onclick="showUtmeHome()" style="margin-bottom:1rem;">← Back to UTME Home</button>
-            <h3 style="color:var(--primary);margin-bottom:4px;">📚 My Exam History</h3>
-            <p style="color:#888;font-size:0.85rem;margin-bottom:14px;">All your past attempts — tap "Review" to see
-                corrections.</p>
-            <div id="history-list">
-                <p style="text-align:center;color:#aaa;padding:20px;">Loading your history...</p>
+        <div id="history-card" style="display:none;">
+            <div class="history-page-header">
+                <h3>📚 My Exam History</h3>
+                <button class="history-page-back" onclick="showUtmeHome()">← Back</button>
+            </div>
+            <div class="history-page-body">
+                <p style="color:#888;font-size:0.85rem;margin-bottom:14px;">All your past attempts — tap "Review" to see
+                    corrections.</p>
+                <div id="history-list">
+                    <p style="text-align:center;color:#aaa;padding:20px;">Loading your history...</p>
+                </div>
             </div>
         </div>
 
         <!-- ══ HISTORY CORRECTIONS MODAL ════════════════════════════════════ -->
         <div id="history-modal"
-            style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;overflow-y:auto;">
+            style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:100001;overflow-y:auto;">
             <div
                 style="background:#fff;max-width:650px;margin:30px auto;border-radius:12px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
                 <div
@@ -1528,7 +1530,7 @@
         </div>
     </div>
     <button onclick="toggleCalc()"
-        style="position:fixed; bottom:20px; right:20px; border-radius:50%; width:55px; height:55px; background:var(--th-primary); color: #fff; border:none; font-size: 24px; cursor:pointer; z-index:99999; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">🖩</button>
+        style="position:fixed; bottom:80px; right:20px; border-radius:50%; width:55px; height:55px; background:var(--th-primary); color: #fff; border:none; font-size: 24px; cursor:pointer; z-index:100002; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">🖩</button>
 
         <script src="scripts/main.js"></script>
 
@@ -1555,17 +1557,5 @@
     }
     </script>
     <!-- ─────────────────────────────────────────────────── -->
-</body>
-</html>tTheme;
-            window._toggleThemeMenu = _toggleThemeMenu;
-
-            // Apply saved theme immediately (anti-FOUC already ran in <head>,
-            // but this ensures button active-states are painted correctly)
-            var saved = 'saas';
-            try { saved = localStorage.getItem('app_theme') || 'saas'; } catch(e) {}
-            setTheme(saved);
-        }());
-        </script>
-        <script src="scripts/main.js"></script>
 </body>
 </html>

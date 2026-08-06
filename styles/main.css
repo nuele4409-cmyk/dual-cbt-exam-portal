@@ -737,7 +737,7 @@
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
             border-top: 1px solid rgba(255, 255, 255, 0.08);
-            z-index: 99998;
+            z-index: 100000;
             padding: 0 0.5rem;
             padding-bottom: env(safe-area-inset-bottom);
             display: none;
@@ -1306,9 +1306,13 @@
             width: 100%;
             max-width: 500px;
             margin-top: 40px;
+            margin-bottom: 40px;
+            max-height: calc(100vh - 80px);
             overflow: hidden;
             box-shadow: 0 16px 50px rgba(0, 0, 0, 0.3);
             animation: auth-slide-up 0.3s ease;
+            display: flex;
+            flex-direction: column;
         }
 
         .subject-modal-header {
@@ -1318,6 +1322,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .subject-modal-header h3 {
@@ -1335,6 +1340,9 @@
 
         .subject-modal-body {
             padding: 1.2rem 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
         }
 
         .subject-modal-body p {
@@ -1418,6 +1426,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .subject-count {
@@ -3492,6 +3501,13 @@
             z-index: 100001;
             overflow-y: auto;
             background: var(--th-bg, #f4f7fb);
+            /* .admin-section cards inside this panel are always white (see .admin-section
+               below) — lock the theme-aware text vars to light values here so dark-glass/
+               light-glass text doesn't turn invisible against that fixed white background. */
+            --th-text: #1a2742;
+            --th-text-2: #64748b;
+            --th-input-bg: #ffffff;
+            --th-border: #e2e8f0;
         }
         #utme-admin-panel.active { display: block; }
         .utme-admin-header {
@@ -3734,44 +3750,97 @@
         #utme-screen > header { display: none !important; }
 
 
-        /* ── UTME Channel Strip ──────────────────────────────────────────── */
-        #utme-channel-strip {
+        /* ── UTME Access-Code Banner (single purpose, top of home) ───────── */
+        .utme-code-banner {
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
             gap: 0.6rem;
-            background: var(--th-surface);
-            border: 1px solid rgba(var(--th-primary-rgb), 0.25);
-            border-radius: 12px;
-            padding: 0.75rem 1.1rem;
+            background: linear-gradient(90deg, rgba(37,211,102,0.14), rgba(37,211,102,0.05));
+            border: 1px solid rgba(37,211,102,0.4);
+            border-radius: 10px;
+            padding: 0.65rem 1rem;
             margin-bottom: 1rem;
-            box-shadow: 0 0 12px rgba(var(--th-primary-rgb), 0.08);
-        }
-        #utme-channel-strip .cs-left {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
             font-size: 0.85rem;
             color: var(--th-text);
             font-weight: 600;
         }
-        #utme-channel-strip .cs-left span { font-size: 1.1rem; }
-        #utme-channel-strip .cs-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .cs-btn {
-            padding: 0.35rem 0.85rem;
-            border-radius: 20px;
+        .utme-code-banner .ucb-link {
+            background: var(--whatsapp, #25d366);
+            color: #fff;
             border: none;
+            border-radius: 20px;
+            padding: 0.35rem 0.9rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: filter 0.2s;
+        }
+        .utme-code-banner .ucb-link:hover { filter: brightness(0.92); }
+
+        /* ── Post-UTME My Exam History — card hover + review button (Phase 2) ── */
+        .putme-hist-card {
+            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+            cursor: pointer;
+            transition: box-shadow 0.2s, transform 0.2s;
+        }
+        .putme-hist-card:hover {
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+            transform: scale(1.01);
+        }
+        .putme-hist-review-btn {
+            background: none;
+            border: none;
+            color: #0056b3;
             font-size: 0.78rem;
             font-weight: 700;
             cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            transition: filter 0.2s;
+            padding: 4px 0 0;
+            margin-top: 4px;
+            white-space: nowrap;
         }
-        .cs-btn:hover { filter: brightness(0.9); }
-        .cs-btn-wa  { background: var(--whatsapp, #25d366); color: #fff; }
-        .cs-btn-lb  { background: rgba(var(--th-primary-rgb), 0.12); color: var(--th-primary); border: 1px solid rgba(var(--th-primary-rgb), 0.3); }
+        .putme-hist-review-btn:hover { text-decoration: underline; }
+
+        /* ── UTME Exam History — its own full-screen page, not an inline card ── */
+        #history-card {
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            overflow-y: auto;
+            background: var(--th-bg, #f4f7fb);
+            padding: 0;
+            margin: 0;
+            border-radius: 0;
+            box-shadow: none;
+            max-width: 100%;
+        }
+        .history-page-header {
+            background: linear-gradient(135deg,#1a2742,#0056b3);
+            color: #fff;
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+        }
+        .history-page-header h3 { margin: 0; font-size: 1.2rem; color: #fff; }
+        .history-page-back {
+            background: rgba(255,255,255,0.15);
+            border: none;
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .history-page-body {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 20px 16px;
+        }
 
         /* ── UTME Mode Panel (form shown after card click) ───────────────── */
         #utme-mode-panel {
@@ -3842,6 +3911,7 @@
         [data-theme="dark-glass"] .putme-sid-badge { color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
         [data-theme="dark-glass"] .putme-change-btn { color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
         [data-theme="dark-glass"] .putme-gami-chip { color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
+        [data-theme="dark-glass"] .badge-chip { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
         [data-theme="dark-glass"] .putme-icon-card { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.09); }
         [data-theme="dark-glass"] .putme-icon-card .pic-label { color: #e2e8f0; }
         [data-theme="dark-glass"] .putme-icon-card .pic-sub   { color: rgba(255,255,255,0.35); }
@@ -3855,6 +3925,7 @@
         [data-theme="light-glass"] .putme-user-name { color: #0f172a; }
         [data-theme="light-glass"] .putme-user-sub  { color: #64748b; }
         [data-theme="light-glass"] .putme-gami-chip { color: #334155; background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.08); }
+        [data-theme="light-glass"] .badge-chip { color: #334155; background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.08); }
         [data-theme="light-glass"] .putme-icon-card { background: rgba(255,255,255,0.7); border-color: rgba(0,0,0,0.08); }
         [data-theme="light-glass"] .putme-icon-card .pic-label { color: #0f172a; }
         [data-theme="light-glass"] .putme-icon-card .pic-sub   { color: #64748b; }

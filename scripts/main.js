@@ -15958,7 +15958,10 @@
 
         function exitSprint() {
             clearInterval(_sprint.timerInterval);
-            document.getElementById('sprint-screen').classList.remove('active');
+            // startSprintChallenge() hides #post-utme-home on entry — just removing
+            // .active from #sprint-screen left neither screen visible (blank page).
+            // backToPutmeHome() already handles sprint-screen cleanup + restoring home.
+            backToPutmeHome();
         }
 
         async function launchSprint() {
@@ -16987,22 +16990,26 @@
         async function adminLoadRevenue() {
             if (!_postSupabase) return;
             try {
-                var [students, codes, exams, questions] = await Promise.all([
-                    _postSupabase.from('profiles').select('id, has_post_utme_access', { count:'exact' }),
-                    _postSupabase.from('activation_codes').select('id, is_used', { count:'exact' }),
-                    _postSupabase.from('post_utme_exams').select('id', { count:'exact' }),
-                    _postSupabase.from('question_bank').select('id', { count:'exact' })
+                // { count:'exact' } gives an accurate SELECT COUNT(*) in res.count regardless
+                // of how many rows the query would actually return — res.data.length is capped
+                // at PostgREST's default row limit (1000), so it silently stops climbing once
+                // a table (question_bank especially, via bulk CSV upload) crosses that cap even
+                // though rows keep being added. head:true skips fetching row data entirely since
+                // only the count is needed here.
+                var [total, premium, allCodes, usedCodes, exams, questions] = await Promise.all([
+                    _postSupabase.from('profiles').select('id', { count:'exact', head:true }),
+                    _postSupabase.from('profiles').select('id', { count:'exact', head:true }).eq('has_post_utme_access', true),
+                    _postSupabase.from('activation_codes').select('id', { count:'exact', head:true }),
+                    _postSupabase.from('activation_codes').select('id', { count:'exact', head:true }).eq('is_used', true),
+                    _postSupabase.from('post_utme_exams').select('id', { count:'exact', head:true }),
+                    _postSupabase.from('question_bank').select('id', { count:'exact', head:true })
                 ]);
-                var total     = (students.data||[]).length;
-                var premium   = (students.data||[]).filter(function(s){ return s.has_post_utme_access; }).length;
-                var allCodes  = (codes.data||[]).length;
-                var usedCodes = (codes.data||[]).filter(function(c){ return c.is_used; }).length;
-                document.getElementById('stat-students').textContent     = total;
-                document.getElementById('stat-paid').textContent         = premium;
-                document.getElementById('stat-codes-total').textContent  = allCodes;
-                document.getElementById('stat-codes-used').textContent   = usedCodes;
-                document.getElementById('stat-exams').textContent        = (exams.data||[]).length;
-                document.getElementById('stat-questions').textContent    = (questions.data||[]).length;
+                document.getElementById('stat-students').textContent     = total.count || 0;
+                document.getElementById('stat-paid').textContent         = premium.count || 0;
+                document.getElementById('stat-codes-total').textContent  = allCodes.count || 0;
+                document.getElementById('stat-codes-used').textContent   = usedCodes.count || 0;
+                document.getElementById('stat-exams').textContent        = exams.count || 0;
+                document.getElementById('stat-questions').textContent    = questions.count || 0;
 
                 var recRes = await _postSupabase.from('profiles').select('full_name, student_id, has_post_utme_access, created_at').order('created_at',{ascending:false}).limit(10);
                 var recentEl = document.getElementById('adm-recent-signups');

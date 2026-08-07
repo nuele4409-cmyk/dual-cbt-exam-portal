@@ -2339,7 +2339,7 @@
         #admin-fab {
             display: none;
             position: fixed;
-            bottom: 90px;
+            bottom: 145px;
             right: 20px;
             background: #312e81;
             color: #fff;
@@ -2350,7 +2350,7 @@
             font-size: 1.3rem;
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(49, 46, 129, 0.5);
-            z-index: 9999;
+            z-index: 100000;
         }
 
         /* Mock event leaderboard overlay */
@@ -3488,7 +3488,7 @@
         #utme-admin-fab {
             display: none;
             position: fixed;
-            bottom: 160px;
+            bottom: 205px;
             right: 20px;
             background: #312e81;
             color: #fff;

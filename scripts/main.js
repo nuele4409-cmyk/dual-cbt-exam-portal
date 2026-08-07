@@ -179,12 +179,19 @@
             }
         }
 
+        var _resultsChannel = null;
         window.initLeaderboard = function () {
             if (!_supabase) { console.warn("initLeaderboard: Supabase not ready"); return; }
             // Initial fetch
             _fetchLeaderboard();
-            // Real-time updates via Supabase channel
-            _supabase.channel('results_channel')
+            // This runs on every exam start (authenticateAndStart) — without removing
+            // the previous channel first, each new exam attempt in the same session
+            // stacked another live subscription that never got torn down, each one
+            // independently re-fetching + re-rendering on every future exam INSERT
+            // regardless of which screen was on screen. That's what caused the
+            // intermittent hangs — remove any existing one before subscribing fresh.
+            if (_resultsChannel) { try { _supabase.removeChannel(_resultsChannel); } catch(e) {} }
+            _resultsChannel = _supabase.channel('results_channel')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'exams' }, function (payload) {
                     console.log("New exam result received, refreshing leaderboard...");
                     _fetchLeaderboard();
@@ -204,6 +211,9 @@
                 return;
             }
             try {
+                // Same leak as the leaderboard channel: this runs on every exam start,
+                // so remove any previous presence channel before subscribing a new one.
+                if (window._presenceChannel) { try { _supabase.removeChannel(window._presenceChannel); } catch(e) {} }
                 const myID = localStorage.getItem("inside_oau_id") || ("anon-" + Date.now());
                 const presenceChannel = _supabase.channel('exam_presence', {
                     config: { presence: { key: myID } }
@@ -227,9 +237,12 @@
                         }
                     });
                 window._presenceChannel = presenceChannel;
-                window.addEventListener('beforeunload', function () {
-                    if (window._presenceChannel) window._presenceChannel.untrack();
-                });
+                if (!window._presenceUnloadBound) {
+                    window._presenceUnloadBound = true;
+                    window.addEventListener('beforeunload', function () {
+                        if (window._presenceChannel) window._presenceChannel.untrack();
+                    });
+                }
             } catch (e) {
                 console.warn("registerPresence failed:", e.message);
                 var el = document.getElementById('live-counter');
@@ -17918,14 +17931,18 @@
                 var opts = document.getElementById('theme-options');
                 if (!opts) return;
                 var open = opts.classList.toggle('open');
-                // Close on outside click
-                if (open) {
+                // Close on outside click — guarded so re-opening via the toggle button
+                // itself (without ever triggering an outside click) can't stack
+                // duplicate document-level click listeners.
+                if (open && !window._themeMenuCloseListenerPending) {
+                    window._themeMenuCloseListenerPending = true;
                     setTimeout(function(){
                         document.addEventListener('click', function _close(e){
                             if (!e.target.closest('#theme-switcher')) {
                                 var o = document.getElementById('theme-options');
                                 if (o) o.classList.remove('open');
                                 document.removeEventListener('click', _close);
+                                window._themeMenuCloseListenerPending = false;
                             }
                         });
                     }, 10);

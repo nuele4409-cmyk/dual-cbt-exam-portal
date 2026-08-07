@@ -14977,6 +14977,12 @@
                             .select('id, question, option_a, option_b, option_c, option_d, correct_answer, explanation, passage')
                             .or('university.eq.' + university + ',university.eq.ALL')
                             .eq('subject', sub)
+                            // Newest first, THEN cap the pool — without this, an unordered
+                            // query can cut off recently-uploaded questions entirely once a
+                            // subject has more rows than the limit. The pool is still
+                            // Fisher-Yates shuffled below, so this only guarantees new
+                            // questions are eligible to appear, not that they always do.
+                            .order('created_at', { ascending: false })
                             .limit(300);
                         if (res.data && res.data.length > 0) {
                             // Fisher-Yates shuffle for truly random selection
@@ -15971,6 +15977,7 @@
                             .select('id, subject, question, option_a, option_b, option_c, option_d, correct_answer, explanation')
                             .in('subject', subjects)
                             .or('university.eq.' + uni + ',university.is.null,university.eq.ALL')
+                            .order('created_at', { ascending: false })
                             .limit(100)
                             .then(function(r){ clearTimeout(t); resolve(r); })
                             .catch(function(){ clearTimeout(t); resolve({ data:[] }); });
@@ -17597,7 +17604,8 @@
                         .in('subject', subjects);
                     if (uni) q = q.or('university.eq.' + uni + ',university.is.null,university.eq.ALL');
                     else     q = q.or('university.is.null,university.eq.ALL');
-                    q.limit(100)
+                    q.order('created_at', { ascending: false })
+                     .limit(100)
                      .then(function(r){
                          clearTimeout(t);
                          resolve((r.data||[]).map(function(q) {

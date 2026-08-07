@@ -664,10 +664,28 @@
                     <div id="sprint-intro" class="sprint-result-card">
                         <div style="font-size:3rem;">🏃</div>
                         <h2 style="color:#1a2742;margin:10px 0 6px;">Sprint Challenge</h2>
-                        <p style="color:#555;margin-bottom:6px;">10 questions · 3-minute countdown · instant feedback
-                        </p>
-                        <p style="color:#888;font-size:0.85rem;margin-bottom:20px;">Questions pulled from your 4
-                            selected subjects.</p>
+                        <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Questions pulled from your 4
+                            selected subjects · instant feedback</p>
+                        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;max-width:320px;margin:0 auto 20px;">
+                            <div style="flex:1;min-width:120px;text-align:left;">
+                                <label style="display:block;font-size:0.75rem;font-weight:700;color:#1a2742;margin-bottom:4px;">Questions</label>
+                                <select id="sprint-cfg-count" style="width:100%;padding:0.5rem;border:1.5px solid #dde3ea;border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
+                                    <option value="5">5</option>
+                                    <option value="10" selected>10</option>
+                                    <option value="15">15</option>
+                                    <option value="20">20</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;min-width:120px;text-align:left;">
+                                <label style="display:block;font-size:0.75rem;font-weight:700;color:#1a2742;margin-bottom:4px;">Time Limit</label>
+                                <select id="sprint-cfg-time" style="width:100%;padding:0.5rem;border:1.5px solid #dde3ea;border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
+                                    <option value="120">2 min</option>
+                                    <option value="180" selected>3 min</option>
+                                    <option value="300">5 min</option>
+                                    <option value="600">10 min</option>
+                                </select>
+                            </div>
+                        </div>
                         <div id="sprint-best-display"
                             style="margin-bottom:16px;font-size:0.9rem;color:#0056b3;font-weight:700;"></div>
                         <button onclick="launchSprint()" class="sprint-next-btn"

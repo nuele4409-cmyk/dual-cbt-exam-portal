@@ -15952,8 +15952,8 @@
             document.getElementById('sprint-result').style.display    = 'none';
             document.getElementById('sprint-timer').textContent       = '3:00';
             document.getElementById('sprint-timer').classList.remove('urgent');
-            var best  = localStorage.getItem('sprint_best_' + (window._authUser ? window._authUser.id : 'guest'));
-            document.getElementById('sprint-best-display').textContent = best ? '🏅 Your best: ' + best + '/10' : '';
+            var best  = localStorage.getItem('sprint_best_pct_' + (window._authUser ? window._authUser.id : 'guest'));
+            document.getElementById('sprint-best-display').textContent = best ? '🏅 Your best: ' + best + '%' : '';
         }
 
         function exitSprint() {
@@ -15969,6 +15969,10 @@
             document.getElementById('sprint-intro').style.display     = 'none';
             document.getElementById('sprint-result').style.display    = 'none';
             document.getElementById('sprint-quiz-area').style.display = 'block';
+            var countEl = document.getElementById('sprint-cfg-count');
+            var timeEl  = document.getElementById('sprint-cfg-time');
+            var questionCount = (countEl && parseInt(countEl.value)) || 10;
+            var timeLimit      = (timeEl && parseInt(timeEl.value)) || 180;
             var subjects = _putme.subjects.slice();
             var uni = (window._authProfile && window._authProfile.selected_university) || (_putme.university || '');
             var allQs = [];
@@ -15981,7 +15985,8 @@
                             .in('subject', subjects)
                             .or('university.eq.' + uni + ',university.is.null,university.eq.ALL')
                             .order('created_at', { ascending: false })
-                            .limit(100)
+                            // Pool must comfortably cover the largest selectable question count.
+                            .limit(Math.max(100, questionCount * 5))
                             .then(function(r){ clearTimeout(t); resolve(r); })
                             .catch(function(){ clearTimeout(t); resolve({ data:[] }); });
                     });
@@ -16002,9 +16007,9 @@
                 return;
             }
             allQs.sort(function(){ return Math.random()-0.5; });
-            _sprint.questions = allQs.slice(0,10);
+            _sprint.questions = allQs.slice(0, questionCount);
             _sprint.index = 0; _sprint.answers = {}; _sprint.correct = 0;
-            _sprint.finished = false; _sprint.timeLeft = 180;
+            _sprint.finished = false; _sprint.timeLeft = timeLimit;
             renderSprintQuestion();
             sprintTimerStart();
         }
@@ -16062,11 +16067,13 @@
             document.getElementById('sprint-result').style.display    = 'block';
             document.getElementById('sprint-result-score').textContent = score + '/' + total;
             document.getElementById('sprint-result-grade').textContent = grade;
-            var key  = 'sprint_best_' + (window._authUser ? window._authUser.id : 'guest');
-            var prev = parseInt(localStorage.getItem(key)||'0',10);
+            // Tracked as a percentage, not a raw score — question count is now
+            // configurable per session, so raw scores aren't comparable across runs.
+            var key  = 'sprint_best_pct_' + (window._authUser ? window._authUser.id : 'guest');
+            var prevPct = parseInt(localStorage.getItem(key)||'0',10);
             var bestEl = document.getElementById('sprint-result-best');
-            if (score > prev) { localStorage.setItem(key,score); bestEl.textContent = '🎉 New Personal Best!'; }
-            else { bestEl.textContent = '🏅 Your best: ' + prev + '/10'; }
+            if (pct > prevPct) { localStorage.setItem(key,pct); bestEl.textContent = '🎉 New Personal Best!'; }
+            else { bestEl.textContent = '🏅 Your best: ' + prevPct + '%'; }
             var countKey = 'sprint_count_' + (window._authUser ? window._authUser.id : 'guest');
             var cnt = parseInt(localStorage.getItem(countKey)||'0',10) + 1;
             localStorage.setItem(countKey, cnt);

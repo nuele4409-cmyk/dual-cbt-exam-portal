@@ -17312,6 +17312,14 @@
             if (ls) ls.classList.remove('active');
             var ss = document.getElementById('sprint-screen');
             if (ss) ss.classList.remove('active');
+            // Close the subject-selection modal if it's open — without this, pressing
+            // Home while it's showing left it covering the screen (z-index 100000,
+            // same as the nav) even though the underlying home screen had already
+            // been refreshed behind it, which read as the home screen "hanging" until
+            // the modal was separately dismissed.
+            var sm = document.getElementById('subject-modal');
+            if (sm) sm.classList.remove('open');
+            _pendingExamMode = null;
             // Remove any dynamically-created full-screen overlays (History, Analytics, Duel)
             ['my-hist-overlay', 'analytics-overlay', 'duel-overlay', 'profile-overlay', 'putme-review-overlay'].forEach(function(id) {
                 var el = document.getElementById(id);

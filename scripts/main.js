@@ -17628,8 +17628,21 @@
 
         async function startDuel() {
             var btn = document.getElementById('duel-start-btn');
+            // Prefer the student's saved subjects (always correct, lowercase keys like
+            // 'mathematics') over the session-only _putme.subjects, which is empty
+            // unless they've already started a Practice/Mock exam this session. The
+            // old fallback ['Use of English'] used the display label, not the actual
+            // subject key stored in question_bank \u2014 that never matched a single row,
+            // which is why Duel always reported "not enough questions" regardless of
+            // how many questions actually existed.
+            var savedSubjects = window._authProfile && window._authProfile.post_utme_subjects;
+            var subjects = (savedSubjects && savedSubjects.length > 0) ? savedSubjects
+                : ((_putme.subjects && _putme.subjects.length > 0) ? _putme.subjects : null);
+            if (!subjects) {
+                alert('Please select your subjects first \u2014 start a Practice or Mock exam once, then come back to Duel.');
+                return;
+            }
             if (btn) { btn.disabled = true; btn.textContent = 'Loading questions\u2026'; btn.style.opacity = '0.6'; }
-            var subjects = (_putme.subjects && _putme.subjects.length > 0) ? _putme.subjects : ['Use of English'];
             var uni = (window._authProfile && window._authProfile.selected_university) || (_putme.university || '');
             try {
                 var allQs = await new Promise(function(resolve) {

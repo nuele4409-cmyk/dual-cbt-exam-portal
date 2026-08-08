@@ -15587,8 +15587,11 @@
                     document.getElementById('hub-quiz-question').textContent = 'No questions available for this subject yet.';
                     return;
                 }
-                pool.sort(function(){ return Math.random() - 0.5; });
-                _hub.quizQuestions = pool.slice(0, Math.min(10, pool.length));
+                // sort(() => Math.random()-0.5) is a well-known biased "shuffle" — it
+                // skews toward certain positions depending on the sort algorithm, so
+                // the same handful of questions tend to keep winning the slice. Use
+                // the proper Fisher-Yates helper already used for the main exam engine.
+                _hub.quizQuestions = pickRandomQuestions(pool, 10);
                 renderHubQuizQuestion();
             } catch(e) {
                 document.getElementById('hub-quiz-question').textContent = 'Could not load questions.';
@@ -16031,8 +16034,9 @@
                 document.getElementById('sprint-quiz-area').style.display = 'none';
                 return;
             }
-            allQs.sort(function(){ return Math.random()-0.5; });
-            _sprint.questions = allQs.slice(0, questionCount);
+            // sort(() => Math.random()-0.5) is a biased shuffle — use the proper
+            // Fisher-Yates helper so question variety is genuinely random each run.
+            _sprint.questions = pickRandomQuestions(allQs, questionCount);
             _sprint.index = 0; _sprint.answers = {}; _sprint.correct = 0;
             _sprint.finished = false; _sprint.timeLeft = timeLimit;
             renderSprintQuestion();
@@ -17611,6 +17615,32 @@
             var actionWrap = document.createElement('div');
             actionWrap.id = 'duel-action-wrap';
             if (_duel.role === 'host') {
+                // Subject picker \u2014 the host's choice decides what the whole duel is
+                // fought over (their questions get broadcast to the guest as-is).
+                var subjectWrap = document.createElement('div');
+                subjectWrap.style.cssText = 'margin-bottom:12px;';
+                var subjectLabel = document.createElement('label');
+                subjectLabel.style.cssText = 'display:block;font-size:0.78rem;font-weight:700;color:#1a2742;margin-bottom:4px;';
+                subjectLabel.textContent = 'Duel subject';
+                var subjectSelect = document.createElement('select');
+                subjectSelect.id = 'duel-subject-select';
+                subjectSelect.style.cssText = 'width:100%;padding:0.6rem;border:1.5px solid #dde3ea;border-radius:8px;font-size:0.9rem;box-sizing:border-box;';
+                var savedSubj = (window._authProfile && window._authProfile.post_utme_subjects) || [];
+                subjectSelect.innerHTML = PUTME_SUBJECTS.map(function(s) {
+                    return '<option value="' + s.id + '">' + s.label + '</option>';
+                }).join('');
+                // 'aptitude' is a locked English substitute for some universities, not
+                // one of PUTME_SUBJECTS' own options — setting .value to it silently
+                // leaves the <select> with nothing selected (selectedIndex -1), which
+                // would send an empty subject to the query and wrongly report "not
+                // enough questions". Only default to a saved subject that's an actual
+                // option here; otherwise let the <select> keep its natural default.
+                var validIds = PUTME_SUBJECTS.map(function(s){ return s.id; });
+                var defaultSubj = savedSubj.filter(function(id){ return validIds.indexOf(id) !== -1; })[0];
+                if (defaultSubj) subjectSelect.value = defaultSubj;
+                subjectWrap.appendChild(subjectLabel);
+                subjectWrap.appendChild(subjectSelect);
+
                 var startBtn = document.createElement('button');
                 startBtn.id = 'duel-start-btn';
                 startBtn.textContent = 'Start Duel';
@@ -17621,6 +17651,7 @@
                 hint.id = 'duel-start-hint';
                 hint.style.cssText = 'text-align:center;color:#aaa;font-size:0.78rem;margin-top:8px;';
                 hint.textContent = 'Waiting for opponent to join\u2026';
+                actionWrap.appendChild(subjectWrap);
                 actionWrap.appendChild(startBtn);
                 actionWrap.appendChild(hint);
             } else {
@@ -17661,16 +17692,19 @@
 
         async function startDuel() {
             var btn = document.getElementById('duel-start-btn');
-            // Prefer the student's saved subjects (always correct, lowercase keys like
-            // 'mathematics') over the session-only _putme.subjects, which is empty
-            // unless they've already started a Practice/Mock exam this session. The
-            // old fallback ['Use of English'] used the display label, not the actual
-            // subject key stored in question_bank \u2014 that never matched a single row,
-            // which is why Duel always reported "not enough questions" regardless of
-            // how many questions actually existed.
-            var savedSubjects = window._authProfile && window._authProfile.post_utme_subjects;
-            var subjects = (savedSubjects && savedSubjects.length > 0) ? savedSubjects
-                : ((_putme.subjects && _putme.subjects.length > 0) ? _putme.subjects : null);
+            // The host's chosen duel subject (single-subject picker in the waiting
+            // room) decides the whole duel \u2014 their questions get broadcast to the
+            // guest as-is. Fall back to the student's saved subjects only if the
+            // picker isn't there for some reason (shouldn't normally happen).
+            var subjectSelect = document.getElementById('duel-subject-select');
+            var subjects;
+            if (subjectSelect && subjectSelect.value) {
+                subjects = [subjectSelect.value];
+            } else {
+                var savedSubjects = window._authProfile && window._authProfile.post_utme_subjects;
+                subjects = (savedSubjects && savedSubjects.length > 0) ? savedSubjects
+                    : ((_putme.subjects && _putme.subjects.length > 0) ? _putme.subjects : null);
+            }
             if (!subjects) {
                 alert('Please select your subjects first \u2014 start a Practice or Mock exam once, then come back to Duel.');
                 return;
@@ -17686,7 +17720,7 @@
                     if (uni) q = q.or('university.eq.' + uni + ',university.is.null,university.eq.ALL');
                     else     q = q.or('university.is.null,university.eq.ALL');
                     q.order('created_at', { ascending: false })
-                     .limit(100)
+                     .limit(200)
                      .then(function(r){
                          clearTimeout(t);
                          resolve((r.data||[]).map(function(q) {
@@ -17705,8 +17739,10 @@
                     alert('Not enough questions in the bank. Ask your admin to add more.');
                     return;
                 }
-                allQs.sort(function(){ return Math.random() - 0.5; });
-                _duel.questions = allQs.slice(0, 10);
+                // sort(() => Math.random()-0.5) is a biased shuffle — same handful of
+                // questions kept winning the slice regardless of the larger pool, which
+                // is why duels felt like they used the same questions every time.
+                _duel.questions = pickRandomQuestions(allQs, 10);
                 _duel.started   = true;
                 clearInterval(_duel.pollInterval);
                 _duel.channel.send({ type:'broadcast', event:'duel_start', payload:{ questions:_duel.questions } });

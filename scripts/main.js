@@ -14976,6 +14976,11 @@
             // Show back button in practice mode; hide during timed mock to prevent accidental exits
             var _eb = document.getElementById('exam-back-btn');
             if (_eb) _eb.style.display = (mode === 'practice') ? 'inline-block' : 'none';
+            // The back button being hidden didn't actually stop anyone leaving — the
+            // bottom nav (Home/Practice/Scores/Profile) was still fully visible and
+            // clickable throughout a timed Mock, an easy way to exit mid-exam. Hide it
+            // too for mock; Practice stays untimed/low-stakes so its exit path stays open.
+            if (mode === 'mock') _setBottomNavVisible(false);
 
             var qtEl = document.getElementById('putme-question-text');
             if (qtEl) qtEl.textContent = 'Loading questions from database…';
@@ -15383,6 +15388,8 @@
             document.getElementById('putme-exam-wrap').classList.remove('active');
             var resWrap = document.getElementById('putme-result-wrap');
             resWrap.classList.add('active');
+            // Exam is over — restore the bottom nav that a Mock hid on entry.
+            _setBottomNavVisible(true);
 
             var total = _putme.questions.length;
             var pct   = total > 0 ? Math.round((totalCorrect / total) * 100) : 0;
@@ -17315,6 +17322,10 @@
 
         // ── backToPutmeHome — hides all sub-screens, restores dashboard ──
         function backToPutmeHome() {
+            // Safety net: restore the bottom nav regardless of which path got us back
+            // here — a Mock in progress hides it, and this is always a legitimate
+            // "we're home now" point where it should be visible again.
+            _setBottomNavVisible(true);
             // Stop any active exam timer to avoid ghost intervals
             if (_putme && _putme.timerInterval) {
                 clearInterval(_putme.timerInterval);

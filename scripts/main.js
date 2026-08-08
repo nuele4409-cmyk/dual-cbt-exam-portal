@@ -14949,6 +14949,18 @@
                 // Durable window-level copies so the event ID/title survive any _putme mutation
                 window.currentEventId    = _putme.mockEventId;
                 window.currentEventTitle = _putme.mockTitle;
+            } else {
+                // Not joining a specific scheduled event — clear any event metadata left
+                // over from an earlier attempt this session. Without this, submitting a
+                // plain Mock/Practice attempt after having joined a scheduled event
+                // earlier would still carry the old mockEventId/currentEventId, causing
+                // submitPutmeExam() to unexpectedly pop a "View the live leaderboard?"
+                // confirm() dialog 1.2s after showing the score — a blocking native
+                // dialog easy to miss, which read as the results screen hanging.
+                _putme.mockEventId       = null;
+                _putme.mockTitle         = null;
+                window.currentEventId    = null;
+                window.currentEventTitle = null;
             }
 
             startPutmeExam(subjects, _launchMode, _selectedUni || 'OAU');

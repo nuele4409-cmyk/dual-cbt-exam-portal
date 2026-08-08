@@ -17316,6 +17316,27 @@
                 clearInterval(_putme.timerInterval);
                 _putme.timerInterval = null;
             }
+            // Sprint and Duel each have their own dedicated exit button (✕ Exit,
+            // ← Back) that properly tears down their timers/polling/realtime channel.
+            // But pressing the bottom-nav Home button instead — a completely normal
+            // thing to do mid-Sprint or mid-Duel — only got as far as removing their
+            // screen/overlay from view here, leaving the timer and (for Duel) the live
+            // Supabase channel and 3s poll running in the background indefinitely.
+            // That's what kept causing intermittent hangs regardless of which screen
+            // was actually showing. Tear all of it down here too, not just the DOM.
+            if (_sprint && _sprint.timerInterval) {
+                clearInterval(_sprint.timerInterval);
+                _sprint.timerInterval = null;
+            }
+            if (_duel && (_duel.timerInterval || _duel.pollInterval || _duel.channel)) {
+                clearInterval(_duel.timerInterval);
+                clearInterval(_duel.pollInterval);
+                if (_duel.channel) { try { _postSupabase.removeChannel(_duel.channel); } catch(e) {} }
+                _duel.timerInterval = null;
+                _duel.pollInterval  = null;
+                _duel.channel       = null;
+                _duel.started       = false;
+            }
             // Hide all sub-screens
             document.getElementById('putme-result-wrap').classList.remove('active');
             document.getElementById('putme-exam-wrap').classList.remove('active');

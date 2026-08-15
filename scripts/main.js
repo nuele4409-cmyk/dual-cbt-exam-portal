@@ -17001,13 +17001,15 @@
             var dateVal = document.getElementById('adm-dc-date').value || _dailyChallengeToday();
             var pinVal  = (document.getElementById('adm-dc-pin').value || '').trim().toUpperCase();
             var durVal  = parseInt(document.getElementById('adm-dc-duration').value || '120', 10) || 120;
-            var qVal    = parseInt(document.getElementById('adm-dc-questions').value || '20', 10) || 20;
             if (!pinVal) { alert('Please enter a PIN.'); return; }
             if (!_postSupabase) { msgEl.style.display='block'; msgEl.style.color='#c00'; msgEl.textContent='Database not connected.'; return; }
             msgEl.style.display = 'block'; msgEl.style.color = '#888'; msgEl.textContent = 'Saving…';
             try {
+                // questions_per_subject is no longer read anywhere (question count now
+                // comes purely from mega_mock_daily_sets.question_ids) — the column still
+                // exists with its own DB default, just not written from here anymore.
                 var res = await _postSupabase.from('post_utme_daily_challenge').upsert({
-                    challenge_date: dateVal, pin: pinVal, duration_minutes: durVal, questions_per_subject: qVal
+                    challenge_date: dateVal, pin: pinVal, duration_minutes: durVal
                 }, { onConflict: 'challenge_date' });
                 if (res.error) throw res.error;
                 msgEl.style.color = '#16a34a';
@@ -17043,12 +17045,149 @@
                     var isToday = r.challenge_date === today;
                     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafd;border:1px solid #e0e7ef;border-radius:8px;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
                         '<span style="font-size:0.82rem;color:#555;">' + r.challenge_date + (isToday ? ' <strong style="color:#16a34a;">(TODAY)</strong>' : '') +
-                        ' · ' + r.duration_minutes + 'min · ' + r.questions_per_subject + ' Qs/subject</span>' +
+                        ' · ' + r.duration_minutes + ' min</span>' +
                         '<strong style="color:#312e81;letter-spacing:1px;">' + r.pin + '</strong>' +
                         '</div>';
                 }).join('');
             } catch(e) {
                 listEl.innerHTML = '<p style="color:#dc3545;text-align:center;">Failed to load: ' + e.message + '</p>';
+            }
+        }
+
+        // ── Mega Mock: admin question-set picker ────────────────────────────
+        // Builds the fixed, order-preserved question_ids array that
+        // _fetchMegaMockQuestions() serves identically to every participant —
+        // this is the only way that table gets populated (besides raw SQL).
+        function _escHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        var _mmSelected = [];    // [{id, subject, question}] — order = presentation order
+        var _mmBrowseCache = {}; // id -> {id, subject, question} for the currently-rendered browse list
+
+        function _mmCurrentDate() {
+            var el = document.getElementById('adm-dc-date');
+            return (el && el.value) || _dailyChallengeToday();
+        }
+
+        async function adminMegaMockBrowse() {
+            var listEl = document.getElementById('mm-browse-list');
+            var subject = document.getElementById('mm-browse-subject').value;
+            var search  = (document.getElementById('mm-browse-search').value || '').trim();
+            if (!subject) { listEl.innerHTML = '<p style="color:#888;text-align:center;font-size:0.85rem;">Choose a subject above to browse questions.</p>'; return; }
+            if (!_postSupabase) return;
+            listEl.innerHTML = '<p style="color:#888;text-align:center;font-size:0.85rem;">Loading…</p>';
+            try {
+                var q = _postSupabase.from('question_bank')
+                    .select('id, subject, question')
+                    .eq('subject', subject)
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+                if (search) q = q.ilike('question', '%' + search + '%');
+                var res = await q;
+                var rows = (res && res.data) || [];
+                _mmBrowseCache = {};
+                rows.forEach(function (r) { _mmBrowseCache[r.id] = r; });
+                if (rows.length === 0) { listEl.innerHTML = '<p style="color:#888;text-align:center;font-size:0.85rem;">No questions found.</p>'; return; }
+                listEl.innerHTML = rows.map(function (r) {
+                    var isSelected = _mmSelected.some(function (s) { return s.id === r.id; });
+                    var text = (r.question || '');
+                    text = text.length > 90 ? text.slice(0, 90) + '…' : text;
+                    return '<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 4px;border-bottom:1px solid #eee;font-size:0.85rem;cursor:pointer;">' +
+                        '<input type="checkbox" ' + (isSelected ? 'checked' : '') + ' onchange="adminMegaMockToggle(' + r.id + ', this.checked)" style="margin-top:3px;">' +
+                        '<span>' + _escHtml(text) + '</span></label>';
+                }).join('');
+            } catch (e) { listEl.innerHTML = '<p style="color:#c00;text-align:center;font-size:0.85rem;">Error loading questions.</p>'; }
+        }
+
+        function adminMegaMockToggle(id, checked) {
+            var idx = _mmSelected.findIndex(function (s) { return s.id === id; });
+            if (checked) {
+                if (idx === -1) {
+                    var q = _mmBrowseCache[id];
+                    if (q) _mmSelected.push({ id: q.id, subject: q.subject, question: (q.question || '').slice(0, 90) });
+                }
+            } else if (idx !== -1) {
+                _mmSelected.splice(idx, 1);
+            }
+            _mmRenderSelected();
+        }
+
+        function _mmRenderSelected() {
+            document.getElementById('mm-selected-count').textContent = _mmSelected.length;
+            var listEl = document.getElementById('mm-selected-list');
+            if (_mmSelected.length === 0) { listEl.innerHTML = '<p style="color:#888;text-align:center;font-size:0.85rem;">None selected yet.</p>'; return; }
+            listEl.innerHTML = _mmSelected.map(function (s, i) {
+                return '<div style="display:flex;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid #eee;font-size:0.8rem;">' +
+                    '<span style="color:#888;min-width:18px;">' + (i + 1) + '.</span>' +
+                    '<span style="color:#312e81;font-weight:700;text-transform:capitalize;white-space:nowrap;">' + _escHtml(s.subject) + ':</span>' +
+                    '<span style="flex:1;">' + _escHtml(s.question) + '</span>' +
+                    '<button onclick="adminMegaMockMove(' + i + ',-1)" ' + (i === 0 ? 'disabled style="opacity:0.3;background:none;border:none;"' : 'style="background:none;border:none;cursor:pointer;"') + ' title="Move up">↑</button>' +
+                    '<button onclick="adminMegaMockMove(' + i + ',1)" ' + (i === _mmSelected.length - 1 ? 'disabled style="opacity:0.3;background:none;border:none;"' : 'style="background:none;border:none;cursor:pointer;"') + ' title="Move down">↓</button>' +
+                    '<button onclick="adminMegaMockRemove(' + i + ')" style="background:none;border:none;color:#c00;cursor:pointer;font-size:1rem;" title="Remove">✕</button>' +
+                    '</div>';
+            }).join('');
+        }
+
+        function adminMegaMockRemove(i) {
+            _mmSelected.splice(i, 1);
+            _mmRenderSelected();
+            adminMegaMockBrowse(); // refresh checkbox states in case the removed question is visible
+        }
+
+        function adminMegaMockMove(i, dir) {
+            var j = i + dir;
+            if (j < 0 || j >= _mmSelected.length) return;
+            var tmp = _mmSelected[i]; _mmSelected[i] = _mmSelected[j]; _mmSelected[j] = tmp;
+            _mmRenderSelected();
+        }
+
+        async function adminMegaMockLoadExistingSet() {
+            var date = _mmCurrentDate();
+            var msgEl = document.getElementById('mm-set-msg');
+            if (!_postSupabase) { msgEl.textContent = 'Database not connected.'; msgEl.style.color = '#c00'; return; }
+            msgEl.textContent = 'Loading…'; msgEl.style.color = '#888';
+            try {
+                var setRes = await _postSupabase.from('mega_mock_daily_sets').select('question_ids').eq('challenge_date', date).maybeSingle();
+                var ids = (setRes && setRes.data && setRes.data.question_ids) || [];
+                if (ids.length === 0) {
+                    _mmSelected = [];
+                    _mmRenderSelected();
+                    msgEl.textContent = 'No existing set for ' + date + ' yet — pick questions below and save.';
+                    msgEl.style.color = '#888';
+                    return;
+                }
+                var qRes = await _postSupabase.from('question_bank').select('id, subject, question').in('id', ids);
+                var byId = {};
+                (qRes.data || []).forEach(function (q) { byId[q.id] = q; });
+                _mmSelected = ids.map(function (id) {
+                    var q = byId[id];
+                    return q ? { id: q.id, subject: q.subject, question: (q.question || '').slice(0, 90) } : null;
+                }).filter(Boolean);
+                _mmRenderSelected();
+                msgEl.textContent = '✅ Loaded ' + _mmSelected.length + ' questions for ' + date + '.';
+                msgEl.style.color = '#16a34a';
+            } catch (e) { msgEl.textContent = 'Error loading existing set: ' + e.message; msgEl.style.color = '#c00'; }
+        }
+
+        async function adminSaveMegaMockSet() {
+            var date = _mmCurrentDate();
+            var msgEl = document.getElementById('mm-set-msg');
+            if (_mmSelected.length === 0) { alert('Select at least one question first.'); return; }
+            if (!_postSupabase) { msgEl.textContent = 'Database not connected.'; msgEl.style.color = '#c00'; return; }
+            msgEl.textContent = 'Saving…'; msgEl.style.color = '#888';
+            try {
+                var ids = _mmSelected.map(function (s) { return s.id; });
+                var res = await _postSupabase.from('mega_mock_daily_sets')
+                    .upsert({ challenge_date: date, question_ids: ids }, { onConflict: 'challenge_date' });
+                if (res.error) throw res.error;
+                msgEl.textContent = '✅ Saved ' + ids.length + ' questions for ' + date + '.';
+                msgEl.style.color = '#16a34a';
+            } catch (e) {
+                msgEl.textContent = '❌ Error: ' + (e.message || e);
+                msgEl.style.color = '#c00';
             }
         }
 

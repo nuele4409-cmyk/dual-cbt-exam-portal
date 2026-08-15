@@ -822,19 +822,60 @@
                                     <label>Duration (minutes)</label>
                                     <input type="number" id="adm-dc-duration" value="120" min="10" max="180">
                                 </div>
-                                <div class="admin-field">
-                                    <label>Questions per Subject</label>
-                                    <select id="adm-dc-questions">
-                                        <option value="10">10 questions</option>
-                                        <option value="20" selected>20 questions</option>
-                                        <option value="30">30 questions</option>
-                                        <option value="40">40 questions</option>
-                                    </select>
-                                </div>
                             </div>
+                            <p style="color:#888;font-size:0.78rem;margin:8px 0 0;">Question count comes from the set you build below — no separate per-subject count needed.</p>
                             <button class="admin-create-btn" style="background:#312e81;" onclick="adminSaveDailyChallenge()">🏆 Save Today's Challenge</button>
                             <div id="adm-dc-msg" style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>
                         </div>
+
+                        <div class="admin-section">
+                            <h3>🎯 Mega Mock — Build the Question Set</h3>
+                            <p style="color:#555;font-size:0.85rem;margin-bottom:12px;">Pick the exact questions every participant will see for the date above — order matters, that's the order they're shown in. Can mix any subjects; every student gets this identical set, never a random pick.</p>
+                            <div class="admin-form-grid">
+                                <div class="admin-field">
+                                    <label>Filter by Subject</label>
+                                    <select id="mm-browse-subject" onchange="adminMegaMockBrowse()">
+                                        <option value="">-- choose a subject --</option>
+                                        <option value="aptitude">Aptitude Test</option>
+                                        <option value="english">Use of English</option>
+                                        <option value="mathematics">Mathematics</option>
+                                        <option value="physics">Physics</option>
+                                        <option value="chemistry">Chemistry</option>
+                                        <option value="biology">Biology</option>
+                                        <option value="economics">Economics</option>
+                                        <option value="government">Government</option>
+                                        <option value="literature">Literature</option>
+                                        <option value="commerce">Commerce</option>
+                                        <option value="accounting">Accounting</option>
+                                        <option value="geography">Geography</option>
+                                        <option value="history">History</option>
+                                        <option value="agric">Agricultural Sci.</option>
+                                        <option value="further_maths">Further Maths</option>
+                                        <option value="irs">Islamic R.S.</option>
+                                        <option value="crs">Christian R.S.</option>
+                                    </select>
+                                </div>
+                                <div class="admin-field">
+                                    <label>Search question text</label>
+                                    <input type="text" id="mm-browse-search" placeholder="optional keyword…" oninput="adminMegaMockBrowse()">
+                                </div>
+                            </div>
+                            <div id="mm-browse-list" style="max-height:240px;overflow-y:auto;border:1px solid #e0e7ef;border-radius:8px;padding:8px;margin-top:8px;background:#fafbfc;">
+                                <p style="color:#888;text-align:center;font-size:0.85rem;">Choose a subject above to browse questions.</p>
+                            </div>
+
+                            <h4 style="margin:16px 0 6px;color:#1a2742;">Selected for this date (<span id="mm-selected-count">0</span>)</h4>
+                            <div id="mm-selected-list" style="max-height:220px;overflow-y:auto;border:1px solid #e0e7ef;border-radius:8px;padding:8px;">
+                                <p style="color:#888;text-align:center;font-size:0.85rem;">None selected yet.</p>
+                            </div>
+
+                            <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
+                                <button class="admin-create-btn" style="background:#6c757d;flex:1;min-width:160px;" onclick="adminMegaMockLoadExistingSet()">🔄 Load Existing Set for This Date</button>
+                                <button class="admin-create-btn" style="flex:1;min-width:160px;" onclick="adminSaveMegaMockSet()">💾 Save Question Set</button>
+                            </div>
+                            <div id="mm-set-msg" style="text-align:center;margin-top:8px;font-size:0.88rem;"></div>
+                        </div>
+
                         <div class="admin-section">
                             <h3>📋 Recent Daily Challenges</h3>
                             <div id="adm-dc-list">

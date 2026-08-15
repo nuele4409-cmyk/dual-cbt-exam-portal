@@ -14806,13 +14806,11 @@
             _buildSubjectChips(savedSubjects);
             if (mode === 'practice') _buildPracticeQCountInputs();
 
-            // Skip the picker only for Mock mode when subjects are already saved — there's
-            // nothing left to configure there (question count is admin-set per event).
-            // Practice mode always shows the picker so the student can set question counts
-            // per subject, even when their 4 subjects are already saved from before.
-            // (The Mega Mock Challenge never reaches this modal at all — its questions and
-            // subjects are fixed by the admin-assigned daily set, not student-picked.)
-            if (mode === 'mock' && savedSubjects.length >= 4 && !_subjectChangeMode) {
+            // Skip the picker when subjects are already saved for Mock and the Mega
+            // Mock Challenge — nothing left to configure there (question count is
+            // admin-set). Practice always shows the picker so the student can set
+            // question counts per subject, even with subjects already saved.
+            if ((mode === 'mock' || mode === 'daily_challenge') && savedSubjects.length >= 4 && !_subjectChangeMode) {
                 confirmSubjectsAndStart();
                 return;
             }
@@ -14820,8 +14818,8 @@
 
             var title = document.getElementById('subject-modal-title');
             var startBtn = document.getElementById('start-exam-btn');
-            if (title) title.textContent = (mode === 'mock' ? '🎯 Mock Exam' : '📝 Practice') + ' — Select 4 Subjects';
-            if (startBtn) startBtn.textContent = 'Start Exam →';
+            if (title) title.textContent = (mode === 'daily_challenge' ? '🏆 Mega Mock Challenge' : mode === 'mock' ? '🎯 Mock Exam' : '📝 Practice') + ' — Select 4 Subjects';
+            if (startBtn) startBtn.textContent = (mode === 'daily_challenge' ? '🏆 Save & Start Challenge →' : 'Start Exam →');
             var _qRow = document.getElementById('putme-q-count-row');
             if (_qRow) _qRow.style.display = (mode === 'practice') ? 'flex' : 'none';
             document.getElementById('subject-modal').classList.add('open');
@@ -14966,6 +14964,14 @@
                 _putme.mockTitle         = null;
                 window.currentEventId    = null;
                 window.currentEventTitle = null;
+            }
+
+            if (_launchMode === 'daily_challenge') {
+                // Subjects are now saved — resume the daily challenge with the row
+                // stashed by startDailyChallenge() before it opened this picker.
+                startDailyChallenge(_pendingDailyChallengeRow);
+                _pendingDailyChallengeRow = null;
+                return;
             }
 
             startPutmeExam(subjects, _launchMode, _selectedUni || 'OAU');
@@ -15129,6 +15135,8 @@
             try { localStorage.removeItem(_dailyChallengeStorageKey('progress')); } catch (e) {}
         }
 
+        var _pendingDailyChallengeRow = null;
+
         // ── Entry point: tapped from the home banner ──────────────────────
         async function openDailyChallengeGate() {
             if (!window._authUser) { alert('Please sign in first.'); return; }
@@ -15148,16 +15156,7 @@
             var res = await _postSupabase.from('post_utme_daily_challenge')
                 .select('*').eq('challenge_date', _dailyChallengeToday()).maybeSingle();
             if (!res || !res.data) { alert("No Mega Mock Challenge is set for today — check the WhatsApp channel or try again shortly."); return; }
-            // Also check the fixed question set exists before showing the PIN prompt —
-            // catches "PIN set but questions forgotten" before the student wastes a PIN
-            // entry on an attempt that can't actually start. Its length also replaces
-            // the old (now-meaningless, since questions aren't per-subject anymore)
-            // questions_per_subject figure in the modal's description text.
-            var setRes = await _postSupabase.from('mega_mock_daily_sets')
-                .select('question_ids').eq('challenge_date', _dailyChallengeToday()).maybeSingle();
-            var qCount = (setRes && setRes.data && setRes.data.question_ids) ? setRes.data.question_ids.length : 0;
-            if (qCount === 0) { alert("Today's Mega Mock questions haven't been set up yet. Please check back shortly."); return; }
-            _renderDailyChallengeModal({ row: res.data, questionCount: qCount });
+            _renderDailyChallengeModal({ row: res.data });
         }
 
         // ── PIN modal — three states: completed / resume(handled earlier) / PIN entry ──
@@ -15182,10 +15181,11 @@
                     '<button onclick="document.getElementById(\'daily-challenge-modal\').remove();" style="background:none;border:none;color:#888;cursor:pointer;font-size:0.85rem;">Close</button>';
             } else {
                 var row = opts.row;
+                var qDesc = row.questions_per_subject ? (row.questions_per_subject + ' Qs/subject') : 'one fixed set per subject';
                 box.innerHTML =
                     '<div style="font-size:2.2rem;margin-bottom:0.5rem;">🏆</div>' +
                     '<h3 style="margin:0 0 0.5rem;color:#1a2742;">Mega Mock Challenge</h3>' +
-                    '<p style="color:#555;font-size:0.88rem;margin:0 0 1rem;">' + row.duration_minutes + ' min · ' + opts.questionCount + ' questions · one attempt today</p>' +
+                    '<p style="color:#555;font-size:0.88rem;margin:0 0 1rem;">' + row.duration_minutes + ' min · ' + qDesc + ' · one attempt today</p>' +
                     '<a href="https://whatsapp.com/channel/0029Vb6sNH4LSmbcGTeawU0q" target="_blank" style="display:block;background:#25D366;color:#fff;font-weight:700;font-size:0.88rem;padding:0.55rem 1rem;border-radius:10px;text-decoration:none;margin-bottom:0.9rem;">💬 Don\'t have the PIN? Get it on WhatsApp</a>' +
                     '<input type="text" id="daily-challenge-pin-input" maxlength="20" placeholder="Enter today\'s PIN" style="width:100%;box-sizing:border-box;padding:0.6rem 0.8rem;border:2px solid #ffcc02;border-radius:8px;font-size:1rem;margin-bottom:0.5rem;text-align:center;letter-spacing:2px;text-transform:uppercase;outline:none;">' +
                     '<div id="daily-challenge-pin-error" style="color:#c62828;font-size:0.82rem;min-height:1.1rem;margin-bottom:0.5rem;"></div>' +
@@ -15214,30 +15214,42 @@
             startDailyChallenge(row);
         }
 
-        // ── Fixed daily question set — completely isolated from the per-subject
-        // random-pool logic in startPutmeExam(). Every student on a given date
-        // gets the exact same question_ids in the exact same order (no
-        // ORDER BY RANDOM(), no per-user reshuffling of the DB query) — the only
-        // thing that could still vary per student is on-screen presentation, and
-        // this doesn't even do that: order is preserved as assigned. Because the
-        // set is fixed by date and never reused, Day 1 and Day 2 can never overlap
-        // as long as whoever assigns question_ids keeps them distinct across days.
-        async function _fetchMegaMockQuestions(dateStr) {
+        // ── Fixed daily question set, scoped per subject — completely isolated
+        // from the per-subject random-pool logic in startPutmeExam(). Each
+        // (date, subject) pair has its own pre-generated, never-repeated
+        // question_ids array (see _mmAutoGenerateSet); two students who both
+        // picked, say, Mathematics today get the exact same Mathematics
+        // questions, in the same order. Students still pick their own 4
+        // subjects like any other exam — only the pool each subject draws from
+        // is fixed instead of random.
+        async function _fetchMegaMockQuestions(dateStr, subjects) {
             if (!_postSupabase) return null;
             var setRes = await _postSupabase.from('mega_mock_daily_sets')
-                .select('question_ids').eq('challenge_date', dateStr).maybeSingle();
-            var ids = setRes && setRes.data && setRes.data.question_ids;
-            if (!ids || ids.length === 0) return null;
+                .select('subject, question_ids')
+                .eq('challenge_date', dateStr)
+                .in('subject', subjects);
+            var rows = (setRes && setRes.data) || [];
+            if (rows.length === 0) return null;
+
+            var byRowSubject = {};
+            rows.forEach(function (r) { byRowSubject[r.subject] = r.question_ids || []; });
+
+            // Preserve the student's subject order, and within each subject the
+            // originally-assigned question order.
+            var allIds = [];
+            subjects.forEach(function (sub) {
+                (byRowSubject[sub] || []).forEach(function (id) { allIds.push(id); });
+            });
+            if (allIds.length === 0) return null;
 
             var qRes = await _postSupabase.from('question_bank')
                 .select('id, subject, question, option_a, option_b, option_c, option_d, correct_answer, explanation, passage')
-                .in('id', ids);
+                .in('id', allIds);
             if (!qRes.data || qRes.data.length === 0) return null;
 
-            // .in() does not preserve order — re-sort to match the assigned sequence.
             var byId = {};
             qRes.data.forEach(function (q) { byId[q.id] = q; });
-            var ordered = ids.map(function (id) { return byId[id]; }).filter(Boolean);
+            var ordered = allIds.map(function (id) { return byId[id]; }).filter(Boolean);
 
             return ordered.map(function (q) {
                 return {
@@ -15249,22 +15261,26 @@
             });
         }
 
-        // ── Start a fresh attempt. Every participant on this date gets the exact
-        // same fixed question set (see _fetchMegaMockQuestions above), spanning
-        // whichever subjects that set actually contains — NOT each student's own
-        // saved subjects, since "same exam for everyone" only holds if nobody's
-        // personal subject picks filter the set differently. Deliberately does not
-        // call startPutmeExam() — that function's random per-subject fetch must
-        // stay untouched for regular Mock/Practice. ──
+        // ── Start a fresh attempt. Subjects are the student's own saved 4 (same
+        // as Mock/Practice) — if not saved yet, opens the same subject picker
+        // used everywhere else and resumes here once they're saved. Any two
+        // students who share a subject on this date get that subject's
+        // identical fixed set (see _fetchMegaMockQuestions). Deliberately does
+        // not call startPutmeExam() — that function's random per-subject fetch
+        // must stay untouched for regular Mock/Practice. ──
         async function startDailyChallenge(row) {
-            var today = row.challenge_date;
-            var questions = await _fetchMegaMockQuestions(today);
-            if (!questions || questions.length === 0) {
-                alert("Today's Mega Mock questions haven't been set up yet. Please check back shortly.");
+            var savedSubjects = window._authProfile && window._authProfile.post_utme_subjects;
+            if (!savedSubjects || savedSubjects.length < 4) {
+                _pendingDailyChallengeRow = row;
+                openSubjectModal('daily_challenge');
                 return;
             }
-            var subjects = [];
-            questions.forEach(function (q) { if (subjects.indexOf(q.subject) === -1) subjects.push(q.subject); });
+            var today = row.challenge_date;
+            var questions = await _fetchMegaMockQuestions(today, savedSubjects);
+            if (!questions || questions.length === 0) {
+                alert("Today's Mega Mock questions haven't been set up for your subjects yet. Please check back shortly.");
+                return;
+            }
             var uni = (window._authProfile && window._authProfile.selected_university) || _selectedUni || 'OAU';
 
             _putme.dailyChallengeDate = today;
@@ -15281,7 +15297,7 @@
             if (_eb) _eb.style.display = 'none';
             _setBottomNavVisible(false);
 
-            initPutmeExam(questions, subjects, 'daily_challenge', uni);
+            initPutmeExam(questions, savedSubjects, 'daily_challenge', uni);
         }
 
         // ── Resume an in-progress attempt after a refresh ──────────────────
@@ -17001,24 +17017,27 @@
             var dateVal = document.getElementById('adm-dc-date').value || _dailyChallengeToday();
             var pinVal  = (document.getElementById('adm-dc-pin').value || '').trim().toUpperCase();
             var durVal  = parseInt(document.getElementById('adm-dc-duration').value || '120', 10) || 120;
-            var countVal = parseInt(document.getElementById('adm-dc-count').value || '30', 10) || 30;
+            var countVal = parseInt(document.getElementById('adm-dc-count').value || '20', 10) || 20;
             if (!pinVal) { alert('Please enter a PIN.'); return; }
             if (!_postSupabase) { msgEl.style.display='block'; msgEl.style.color='#c00'; msgEl.textContent='Database not connected.'; return; }
             msgEl.style.display = 'block'; msgEl.style.color = '#888'; msgEl.textContent = 'Saving…';
             try {
-                // questions_per_subject is no longer read anywhere (question count now
-                // comes purely from mega_mock_daily_sets.question_ids) — the column still
-                // exists with its own DB default, just not written from here anymore.
                 var res = await _postSupabase.from('post_utme_daily_challenge').upsert({
-                    challenge_date: dateVal, pin: pinVal, duration_minutes: durVal
+                    challenge_date: dateVal, pin: pinVal, duration_minutes: durVal, questions_per_subject: countVal
                 }, { onConflict: 'challenge_date' });
                 if (res.error) throw res.error;
 
-                msgEl.textContent = 'PIN saved — picking ' + countVal + ' never-before-used questions…';
-                var picked = await _mmAutoGenerateSet(dateVal, countVal);
+                msgEl.textContent = 'PIN saved — picking ' + countVal + ' never-before-used questions per subject…';
+                var summary = await _mmAutoGenerateSet(dateVal, countVal);
 
                 msgEl.style.color = '#16a34a';
-                msgEl.textContent = '✅ Saved! PIN "' + pinVal + '" is live for ' + dateVal + ' with ' + picked + ' questions.';
+                var shortfalls = summary.filter(function (s) { return s.picked < countVal; });
+                if (shortfalls.length) {
+                    msgEl.textContent = '✅ Saved! PIN "' + pinVal + '" is live for ' + dateVal + '. Short on questions for: ' +
+                        shortfalls.map(function (s) { return s.subject + ' (' + s.picked + '/' + countVal + ')'; }).join(', ') + '.';
+                } else {
+                    msgEl.textContent = '✅ Saved! PIN "' + pinVal + '" is live for ' + dateVal + ' with ' + countVal + ' questions/subject across ' + summary.length + ' subjects.';
+                }
                 adminLoadDailyChallenges();
             } catch(e) {
                 msgEl.style.color = '#dc3545';
@@ -17046,13 +17065,16 @@
                     var pinEl = document.getElementById('adm-dc-pin');
                     if (pinEl && !pinEl.value) pinEl.value = todayRow.pin;
                 }
-                // Pull the generated question count alongside, so the admin can see
-                // whether a set actually got built for each date.
+                // Pull the generated question counts alongside (summed across every
+                // subject's row for that date), so the admin can see whether a set
+                // actually got built for each date.
                 var dates = rows.map(function(r){ return r.challenge_date; });
                 var setsRes = await _postSupabase.from('mega_mock_daily_sets')
                     .select('challenge_date, question_ids').in('challenge_date', dates);
                 var countByDate = {};
-                (setsRes.data || []).forEach(function(s){ countByDate[s.challenge_date] = (s.question_ids || []).length; });
+                (setsRes.data || []).forEach(function(s){
+                    countByDate[s.challenge_date] = (countByDate[s.challenge_date] || 0) + (s.question_ids || []).length;
+                });
 
                 listEl.innerHTML = rows.map(function(r) {
                     var isToday = r.challenge_date === today;
@@ -17070,46 +17092,58 @@
         }
 
         // ── Mega Mock: automatic daily question-set generation ──────────────
-        // Builds the fixed question_ids array that _fetchMegaMockQuestions() serves
-        // identically to every participant. The admin only chooses a count — the
-        // questions themselves are picked automatically from anywhere in the bank
-        // (no subject filtering, since which subjects students pick is unknown/
-        // irrelevant here), excluding every question already used on any earlier
-        // daily-challenge date so nothing can ever repeat across days.
-        async function _mmAutoGenerateSet(date, count) {
+        // Builds one fixed question_ids array PER SUBJECT that
+        // _fetchMegaMockQuestions() draws from — students pick their own 4
+        // subjects as usual, so fairness only needs to hold per-subject: any two
+        // students who both picked, say, Physics today see the same Physics
+        // questions. Within each subject, questions already used on any earlier
+        // daily-challenge date (for that same subject) are excluded so nothing
+        // repeats across days. If a subject's bank runs short, that subject just
+        // gets fewer than requested rather than failing the whole save.
+        function _mmAllSubjectIds() {
+            return PUTME_SUBJECTS.map(function (s) { return s.id; }).concat(['aptitude']);
+        }
+
+        async function _mmAutoGenerateSet(date, countPerSubject) {
             if (!_postSupabase) throw new Error('Database not connected.');
+            var subjects = _mmAllSubjectIds();
 
             var pastRes = await _postSupabase.from('mega_mock_daily_sets')
-                .select('question_ids')
+                .select('subject, question_ids')
                 .neq('challenge_date', date);
             if (pastRes.error) throw pastRes.error;
-            var usedIds = {};
+            var usedIdsBySubject = {};
             (pastRes.data || []).forEach(function (row) {
-                (row.question_ids || []).forEach(function (id) { usedIds[id] = true; });
+                var set = usedIdsBySubject[row.subject] || (usedIdsBySubject[row.subject] = {});
+                (row.question_ids || []).forEach(function (id) { set[id] = true; });
             });
 
-            var poolRes = await _postSupabase.from('question_bank').select('id');
-            if (poolRes.error) throw poolRes.error;
-            var pool = (poolRes.data || [])
-                .map(function (r) { return r.id; })
-                .filter(function (id) { return !usedIds[id]; });
+            var summary = [];
+            for (var i = 0; i < subjects.length; i++) {
+                var subject = subjects[i];
+                var poolRes = await _postSupabase.from('question_bank').select('id').eq('subject', subject);
+                if (poolRes.error) throw poolRes.error;
+                var usedIds = usedIdsBySubject[subject] || {};
+                var pool = (poolRes.data || [])
+                    .map(function (r) { return r.id; })
+                    .filter(function (id) { return !usedIds[id]; });
 
-            if (pool.length < count) {
-                throw new Error('Only ' + pool.length + ' unused question(s) left in the whole bank, but ' +
-                    count + ' were requested. Add more questions to the bank, or lower the count.');
+                // Fisher-Yates shuffle, take up to countPerSubject.
+                for (var j = pool.length - 1; j > 0; j--) {
+                    var k = Math.floor(Math.random() * (j + 1));
+                    var tmp = pool[j]; pool[j] = pool[k]; pool[k] = tmp;
+                }
+                var take = Math.min(countPerSubject, pool.length);
+                var picked = pool.slice(0, take);
+
+                if (picked.length > 0) {
+                    var res = await _postSupabase.from('mega_mock_daily_sets')
+                        .upsert({ challenge_date: date, subject: subject, question_ids: picked }, { onConflict: 'challenge_date,subject' });
+                    if (res.error) throw res.error;
+                }
+                summary.push({ subject: subject, picked: picked.length });
             }
-
-            // Fisher-Yates shuffle, take the first `count`.
-            for (var i = pool.length - 1; i > 0; i--) {
-                var j = Math.floor(Math.random() * (i + 1));
-                var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
-            }
-            var picked = pool.slice(0, count);
-
-            var res = await _postSupabase.from('mega_mock_daily_sets')
-                .upsert({ challenge_date: date, question_ids: picked }, { onConflict: 'challenge_date' });
-            if (res.error) throw res.error;
-            return picked.length;
+            return summary;
         }
 
         function showAdminMsg(msg, color) {

@@ -808,7 +808,7 @@
 
                         <div class="admin-section">
                             <h3>🏆 Mega Mock Challenge — Daily PIN</h3>
-                            <p style="color:#555;font-size:0.85rem;margin-bottom:12px;">One PIN + question count per day, runs until <strong>Sept 1</strong>. Students get exactly one attempt/day, enforced by the database.</p>
+                            <p style="color:#555;font-size:0.85rem;margin-bottom:12px;">One PIN + questions-per-subject per day, runs until <strong>Sept 1</strong>. Students pick their own 4 subjects as usual; each subject gets its own fixed daily set. One attempt/day, enforced by the database.</p>
                             <div class="admin-form-grid">
                                 <div class="admin-field">
                                     <label>Date</label>
@@ -823,16 +823,16 @@
                                     <input type="number" id="adm-dc-duration" value="120" min="10" max="180">
                                 </div>
                                 <div class="admin-field">
-                                    <label>Number of Questions</label>
+                                    <label>Questions per Subject</label>
                                     <select id="adm-dc-count">
-                                        <option value="20">20 questions</option>
-                                        <option value="30" selected>30 questions</option>
-                                        <option value="40">40 questions</option>
-                                        <option value="50">50 questions</option>
+                                        <option value="20" selected>20 questions/subject</option>
+                                        <option value="30">30 questions/subject</option>
+                                        <option value="40">40 questions/subject</option>
+                                        <option value="50">50 questions/subject</option>
                                     </select>
                                 </div>
                             </div>
-                            <p style="color:#888;font-size:0.78rem;margin:8px 0 0;">Questions are picked automatically from across the whole question bank — every student that day gets the exact same set, and once a question has been used on any day, it's never reused on a later one.</p>
+                            <p style="color:#888;font-size:0.78rem;margin:8px 0 0;">Each subject gets its own fixed set, picked automatically — any two students who pick the same subject see the same questions for it, and once a question has been used for a subject on any day, it's never reused for that subject again.</p>
                             <button class="admin-create-btn" style="background:#312e81;" onclick="adminSaveDailyChallenge()">🏆 Save Today's Challenge</button>
                             <div id="adm-dc-msg" style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>
                         </div>

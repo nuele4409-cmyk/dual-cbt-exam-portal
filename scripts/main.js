@@ -14806,11 +14806,11 @@
             _buildSubjectChips(savedSubjects);
             if (mode === 'practice') _buildPracticeQCountInputs();
 
-            // Skip the picker only for Mock mode when subjects are already saved — there's
-            // nothing left to configure there (question count is admin-set per event).
+            // Skip the picker for Mock and the daily challenge when subjects are already
+            // saved — there's nothing left to configure there (question count is admin-set).
             // Practice mode always shows the picker so the student can set question counts
             // per subject, even when their 4 subjects are already saved from before.
-            if (mode === 'mock' && savedSubjects.length >= 4 && !_subjectChangeMode) {
+            if ((mode === 'mock' || mode === 'daily_challenge') && savedSubjects.length >= 4 && !_subjectChangeMode) {
                 confirmSubjectsAndStart();
                 return;
             }
@@ -14818,8 +14818,8 @@
 
             var title = document.getElementById('subject-modal-title');
             var startBtn = document.getElementById('start-exam-btn');
-            if (title) title.textContent = (mode === 'mock' ? '🎯 Mock Exam' : '📝 Practice') + ' — Select 4 Subjects';
-            if (startBtn) startBtn.textContent = 'Start Exam →';
+            if (title) title.textContent = (mode === 'daily_challenge' ? '🏆 Mega Mock Challenge' : mode === 'mock' ? '🎯 Mock Exam' : '📝 Practice') + ' — Select 4 Subjects';
+            if (startBtn) startBtn.textContent = (mode === 'daily_challenge' ? '🏆 Save & Start Challenge →' : 'Start Exam →');
             var _qRow = document.getElementById('putme-q-count-row');
             if (_qRow) _qRow.style.display = (mode === 'practice') ? 'flex' : 'none';
             document.getElementById('subject-modal').classList.add('open');
@@ -14964,6 +14964,14 @@
                 _putme.mockTitle         = null;
                 window.currentEventId    = null;
                 window.currentEventTitle = null;
+            }
+
+            if (_launchMode === 'daily_challenge') {
+                // Subjects are now saved — resume the daily challenge with the row
+                // stashed by startDailyChallenge() before it opened this picker.
+                startDailyChallenge(_pendingDailyChallengeRow);
+                _pendingDailyChallengeRow = null;
+                return;
             }
 
             startPutmeExam(subjects, _launchMode, _selectedUni || 'OAU');
@@ -15173,6 +15181,7 @@
                     '<div style="font-size:2.2rem;margin-bottom:0.5rem;">🏆</div>' +
                     '<h3 style="margin:0 0 0.5rem;color:#1a2742;">Mega Mock Challenge</h3>' +
                     '<p style="color:#555;font-size:0.88rem;margin:0 0 1rem;">' + row.duration_minutes + ' min · ' + row.questions_per_subject + ' Qs/subject · one attempt today</p>' +
+                    '<a href="https://whatsapp.com/channel/0029Vb6sNH4LSmbcGTeawU0q" target="_blank" style="display:block;background:#25D366;color:#fff;font-weight:700;font-size:0.88rem;padding:0.55rem 1rem;border-radius:10px;text-decoration:none;margin-bottom:0.9rem;">💬 Don\'t have the PIN? Get it on WhatsApp</a>' +
                     '<input type="text" id="daily-challenge-pin-input" maxlength="20" placeholder="Enter today\'s PIN" style="width:100%;box-sizing:border-box;padding:0.6rem 0.8rem;border:2px solid #ffcc02;border-radius:8px;font-size:1rem;margin-bottom:0.5rem;text-align:center;letter-spacing:2px;text-transform:uppercase;outline:none;">' +
                     '<div id="daily-challenge-pin-error" style="color:#c62828;font-size:0.82rem;min-height:1.1rem;margin-bottom:0.5rem;"></div>' +
                     '<button id="daily-challenge-pin-submit" style="width:100%;background:#312e81;color:#fff;border:none;border-radius:10px;padding:0.65rem;font-weight:700;font-size:0.95rem;cursor:pointer;margin-bottom:0.5rem;">Unlock Challenge</button>' +
@@ -15200,11 +15209,20 @@
             startDailyChallenge(row);
         }
 
-        // ── Start a fresh attempt (subjects already required to be saved) ──
+        // Row stashed here when startDailyChallenge() has to send the student through
+        // the subject picker first — confirmSubjectsAndStart() reads it back once
+        // subjects are saved, so they never re-enter the PIN or lose the challenge.
+        var _pendingDailyChallengeRow = null;
+
+        // ── Start a fresh attempt. If subjects aren't saved yet, shows the same
+        // subject picker used everywhere else instead of just blocking with an
+        // alert — and since subjects save to the profile (not per-day), this is a
+        // one-time thing, not a "pick your subjects every day" chore. ──
         async function startDailyChallenge(row) {
             var savedSubjects = window._authProfile && window._authProfile.post_utme_subjects;
             if (!savedSubjects || savedSubjects.length < 4) {
-                alert('Please select your subjects first — start a Practice or Mock exam once, then come back to the Mega Mock Challenge.');
+                _pendingDailyChallengeRow = row;
+                openSubjectModal('daily_challenge');
                 return;
             }
             var uni = (window._authProfile && window._authProfile.selected_university) || _selectedUni || 'OAU';

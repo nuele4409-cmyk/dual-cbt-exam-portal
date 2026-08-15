@@ -14806,11 +14806,13 @@
             _buildSubjectChips(savedSubjects);
             if (mode === 'practice') _buildPracticeQCountInputs();
 
-            // Skip the picker for Mock and the daily challenge when subjects are already
-            // saved — there's nothing left to configure there (question count is admin-set).
+            // Skip the picker only for Mock mode when subjects are already saved — there's
+            // nothing left to configure there (question count is admin-set per event).
             // Practice mode always shows the picker so the student can set question counts
             // per subject, even when their 4 subjects are already saved from before.
-            if ((mode === 'mock' || mode === 'daily_challenge') && savedSubjects.length >= 4 && !_subjectChangeMode) {
+            // (The Mega Mock Challenge never reaches this modal at all — its questions and
+            // subjects are fixed by the admin-assigned daily set, not student-picked.)
+            if (mode === 'mock' && savedSubjects.length >= 4 && !_subjectChangeMode) {
                 confirmSubjectsAndStart();
                 return;
             }
@@ -14818,8 +14820,8 @@
 
             var title = document.getElementById('subject-modal-title');
             var startBtn = document.getElementById('start-exam-btn');
-            if (title) title.textContent = (mode === 'daily_challenge' ? '🏆 Mega Mock Challenge' : mode === 'mock' ? '🎯 Mock Exam' : '📝 Practice') + ' — Select 4 Subjects';
-            if (startBtn) startBtn.textContent = (mode === 'daily_challenge' ? '🏆 Save & Start Challenge →' : 'Start Exam →');
+            if (title) title.textContent = (mode === 'mock' ? '🎯 Mock Exam' : '📝 Practice') + ' — Select 4 Subjects';
+            if (startBtn) startBtn.textContent = 'Start Exam →';
             var _qRow = document.getElementById('putme-q-count-row');
             if (_qRow) _qRow.style.display = (mode === 'practice') ? 'flex' : 'none';
             document.getElementById('subject-modal').classList.add('open');
@@ -14966,14 +14968,6 @@
                 window.currentEventTitle = null;
             }
 
-            if (_launchMode === 'daily_challenge') {
-                // Subjects are now saved — resume the daily challenge with the row
-                // stashed by startDailyChallenge() before it opened this picker.
-                startDailyChallenge(_pendingDailyChallengeRow);
-                _pendingDailyChallengeRow = null;
-                return;
-            }
-
             startPutmeExam(subjects, _launchMode, _selectedUni || 'OAU');
         }
 
@@ -14991,7 +14985,9 @@
             // bottom nav (Home/Practice/Scores/Profile) was still fully visible and
             // clickable throughout a timed Mock, an easy way to exit mid-exam. Hide it
             // too for mock; Practice stays untimed/low-stakes so its exit path stays open.
-            if (mode === 'mock' || mode === 'daily_challenge') _setBottomNavVisible(false);
+            // (The Mega Mock Challenge has its own dedicated start path — startDailyChallenge()
+            // — and never reaches this function at all; see that function for its lock-in.)
+            if (mode === 'mock') _setBottomNavVisible(false);
 
             var qtEl = document.getElementById('putme-question-text');
             if (qtEl) qtEl.textContent = 'Loading questions from database…';
@@ -15008,7 +15004,7 @@
             if (_postSupabase) {
                 for (var i = 0; i < subjects.length; i++) {
                     var sub = subjects[i];
-                    var questionsPerSubject = (mode === 'mock' || mode === 'daily_challenge')
+                    var questionsPerSubject = (mode === 'mock')
                         ? mockQuestionsPerSubject
                         : ((_putme.practiceQCounts && _putme.practiceQCounts[sub]) || 15);
                     try {
@@ -15068,10 +15064,10 @@
                 return;
             }
 
-            // Preview mode: non-activated users get 10 questions only. The daily
-            // challenge is exempt — it runs independent of subscription status, so a
-            // non-premium student gets the same full attempt as everyone else.
-            if (!window._putmeHasAccess && mode !== 'daily_challenge') {
+            // Preview mode: non-activated users get 10 questions only.
+            // (The Mega Mock Challenge never reaches this function — see
+            // startDailyChallenge() — so it needs no exemption here.)
+            if (!window._putmeHasAccess) {
                 _putme.isPreview = true;
                 allQuestions = allQuestions.slice(0, 10);
             } else {
@@ -15152,7 +15148,16 @@
             var res = await _postSupabase.from('post_utme_daily_challenge')
                 .select('*').eq('challenge_date', _dailyChallengeToday()).maybeSingle();
             if (!res || !res.data) { alert("No Mega Mock Challenge is set for today — check the WhatsApp channel or try again shortly."); return; }
-            _renderDailyChallengeModal({ row: res.data });
+            // Also check the fixed question set exists before showing the PIN prompt —
+            // catches "PIN set but questions forgotten" before the student wastes a PIN
+            // entry on an attempt that can't actually start. Its length also replaces
+            // the old (now-meaningless, since questions aren't per-subject anymore)
+            // questions_per_subject figure in the modal's description text.
+            var setRes = await _postSupabase.from('mega_mock_daily_sets')
+                .select('question_ids').eq('challenge_date', _dailyChallengeToday()).maybeSingle();
+            var qCount = (setRes && setRes.data && setRes.data.question_ids) ? setRes.data.question_ids.length : 0;
+            if (qCount === 0) { alert("Today's Mega Mock questions haven't been set up yet. Please check back shortly."); return; }
+            _renderDailyChallengeModal({ row: res.data, questionCount: qCount });
         }
 
         // ── PIN modal — three states: completed / resume(handled earlier) / PIN entry ──
@@ -15180,7 +15185,7 @@
                 box.innerHTML =
                     '<div style="font-size:2.2rem;margin-bottom:0.5rem;">🏆</div>' +
                     '<h3 style="margin:0 0 0.5rem;color:#1a2742;">Mega Mock Challenge</h3>' +
-                    '<p style="color:#555;font-size:0.88rem;margin:0 0 1rem;">' + row.duration_minutes + ' min · ' + row.questions_per_subject + ' Qs/subject · one attempt today</p>' +
+                    '<p style="color:#555;font-size:0.88rem;margin:0 0 1rem;">' + row.duration_minutes + ' min · ' + opts.questionCount + ' questions · one attempt today</p>' +
                     '<a href="https://whatsapp.com/channel/0029Vb6sNH4LSmbcGTeawU0q" target="_blank" style="display:block;background:#25D366;color:#fff;font-weight:700;font-size:0.88rem;padding:0.55rem 1rem;border-radius:10px;text-decoration:none;margin-bottom:0.9rem;">💬 Don\'t have the PIN? Get it on WhatsApp</a>' +
                     '<input type="text" id="daily-challenge-pin-input" maxlength="20" placeholder="Enter today\'s PIN" style="width:100%;box-sizing:border-box;padding:0.6rem 0.8rem;border:2px solid #ffcc02;border-radius:8px;font-size:1rem;margin-bottom:0.5rem;text-align:center;letter-spacing:2px;text-transform:uppercase;outline:none;">' +
                     '<div id="daily-challenge-pin-error" style="color:#c62828;font-size:0.82rem;min-height:1.1rem;margin-bottom:0.5rem;"></div>' +
@@ -15209,27 +15214,74 @@
             startDailyChallenge(row);
         }
 
-        // Row stashed here when startDailyChallenge() has to send the student through
-        // the subject picker first — confirmSubjectsAndStart() reads it back once
-        // subjects are saved, so they never re-enter the PIN or lose the challenge.
-        var _pendingDailyChallengeRow = null;
+        // ── Fixed daily question set — completely isolated from the per-subject
+        // random-pool logic in startPutmeExam(). Every student on a given date
+        // gets the exact same question_ids in the exact same order (no
+        // ORDER BY RANDOM(), no per-user reshuffling of the DB query) — the only
+        // thing that could still vary per student is on-screen presentation, and
+        // this doesn't even do that: order is preserved as assigned. Because the
+        // set is fixed by date and never reused, Day 1 and Day 2 can never overlap
+        // as long as whoever assigns question_ids keeps them distinct across days.
+        async function _fetchMegaMockQuestions(dateStr) {
+            if (!_postSupabase) return null;
+            var setRes = await _postSupabase.from('mega_mock_daily_sets')
+                .select('question_ids').eq('challenge_date', dateStr).maybeSingle();
+            var ids = setRes && setRes.data && setRes.data.question_ids;
+            if (!ids || ids.length === 0) return null;
 
-        // ── Start a fresh attempt. If subjects aren't saved yet, shows the same
-        // subject picker used everywhere else instead of just blocking with an
-        // alert — and since subjects save to the profile (not per-day), this is a
-        // one-time thing, not a "pick your subjects every day" chore. ──
+            var qRes = await _postSupabase.from('question_bank')
+                .select('id, subject, question, option_a, option_b, option_c, option_d, correct_answer, explanation, passage')
+                .in('id', ids);
+            if (!qRes.data || qRes.data.length === 0) return null;
+
+            // .in() does not preserve order — re-sort to match the assigned sequence.
+            var byId = {};
+            qRes.data.forEach(function (q) { byId[q.id] = q; });
+            var ordered = ids.map(function (id) { return byId[id]; }).filter(Boolean);
+
+            return ordered.map(function (q) {
+                return {
+                    id: q.id, subject: q.subject, question: q.question,
+                    options: [q.option_a, q.option_b, q.option_c, q.option_d],
+                    answer: ['A', 'B', 'C', 'D'].indexOf((q.correct_answer || '').toUpperCase()),
+                    explanation: q.explanation || '', passage: q.passage || ''
+                };
+            });
+        }
+
+        // ── Start a fresh attempt. Every participant on this date gets the exact
+        // same fixed question set (see _fetchMegaMockQuestions above), spanning
+        // whichever subjects that set actually contains — NOT each student's own
+        // saved subjects, since "same exam for everyone" only holds if nobody's
+        // personal subject picks filter the set differently. Deliberately does not
+        // call startPutmeExam() — that function's random per-subject fetch must
+        // stay untouched for regular Mock/Practice. ──
         async function startDailyChallenge(row) {
-            var savedSubjects = window._authProfile && window._authProfile.post_utme_subjects;
-            if (!savedSubjects || savedSubjects.length < 4) {
-                _pendingDailyChallengeRow = row;
-                openSubjectModal('daily_challenge');
+            var today = row.challenge_date;
+            var questions = await _fetchMegaMockQuestions(today);
+            if (!questions || questions.length === 0) {
+                alert("Today's Mega Mock questions haven't been set up yet. Please check back shortly.");
                 return;
             }
+            var subjects = [];
+            questions.forEach(function (q) { if (subjects.indexOf(q.subject) === -1) subjects.push(q.subject); });
             var uni = (window._authProfile && window._authProfile.selected_university) || _selectedUni || 'OAU';
-            _putme.dailyChallengeDate = row.challenge_date;
-            _putme.customDuration      = (row.duration_minutes || 120) * 60;
-            _putme.questionsPerSubject = row.questions_per_subject || 20;
-            await startPutmeExam(savedSubjects, 'daily_challenge', uni);
+
+            _putme.dailyChallengeDate = today;
+            _putme.customDuration     = (row.duration_minutes || 120) * 60;
+
+            // Mirror startPutmeExam's dashboard→exam-wrap UI setup + lock-in
+            // (back button + bottom nav hidden) without calling that function.
+            document.getElementById('post-utme-home').style.display = 'none';
+            var _ag = document.getElementById('putme-action-grid');
+            if (_ag) _ag.style.display = 'none';
+            document.getElementById('putme-result-wrap').classList.remove('active');
+            document.getElementById('putme-exam-wrap').classList.add('active');
+            var _eb = document.getElementById('exam-back-btn');
+            if (_eb) _eb.style.display = 'none';
+            _setBottomNavVisible(false);
+
+            initPutmeExam(questions, subjects, 'daily_challenge', uni);
         }
 
         // ── Resume an in-progress attempt after a refresh ──────────────────

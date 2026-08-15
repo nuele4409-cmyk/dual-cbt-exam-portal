@@ -14002,7 +14002,6 @@
         window.startSprintChallenge     = startSprintChallenge;
         window.openDuelLobby            = openDuelLobby;
         window.openLeaderboard          = openLeaderboard;
-        window.openAnalyticsHub         = openAnalyticsHub;
         window.openMyHistory            = openMyHistory;
         window._showActivationModal     = _showActivationModal;
         window._requirePutmeAccess      = _requirePutmeAccess;
@@ -14147,6 +14146,10 @@
             window._activePortal = 'post-utme';
             _setBottomNavVisible(true);
             _setBottomNavActive('home');
+
+            // If a daily-challenge attempt was in progress when the page was
+            // refreshed/closed, jump straight back into it instead of showing home.
+            _dailyChallengeAutoResumeIfNeeded();
         }
 
         function _showPutmeActivation() {
@@ -14980,7 +14983,7 @@
             // bottom nav (Home/Practice/Scores/Profile) was still fully visible and
             // clickable throughout a timed Mock, an easy way to exit mid-exam. Hide it
             // too for mock; Practice stays untimed/low-stakes so its exit path stays open.
-            if (mode === 'mock') _setBottomNavVisible(false);
+            if (mode === 'mock' || mode === 'daily_challenge') _setBottomNavVisible(false);
 
             var qtEl = document.getElementById('putme-question-text');
             if (qtEl) qtEl.textContent = 'Loading questions from database…';
@@ -14997,7 +15000,7 @@
             if (_postSupabase) {
                 for (var i = 0; i < subjects.length; i++) {
                     var sub = subjects[i];
-                    var questionsPerSubject = (mode === 'mock')
+                    var questionsPerSubject = (mode === 'mock' || mode === 'daily_challenge')
                         ? mockQuestionsPerSubject
                         : ((_putme.practiceQCounts && _putme.practiceQCounts[sub]) || 15);
                     try {
@@ -15057,8 +15060,10 @@
                 return;
             }
 
-            // Preview mode: non-activated users get 10 questions only
-            if (!window._putmeHasAccess) {
+            // Preview mode: non-activated users get 10 questions only. The daily
+            // challenge is exempt — it runs independent of subscription status, so a
+            // non-premium student gets the same full attempt as everyone else.
+            if (!window._putmeHasAccess && mode !== 'daily_challenge') {
                 _putme.isPreview = true;
                 allQuestions = allQuestions.slice(0, 10);
             } else {
@@ -15066,6 +15071,218 @@
             }
 
             initPutmeExam(allQuestions, subjects, mode, university);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // DAILY PIN-GATED "MEGA MOCK CHALLENGE" — runs until 2026-09-01
+        // One attempt/day, enforced server-side by a partial unique index on
+        // post_utme_exams(student_id, daily_challenge_date). localStorage only
+        // drives the UI (lock message + refresh-resume) — it is not the source
+        // of truth, and clearing it cannot bypass the DB constraint.
+        // ═══════════════════════════════════════════════════════════════════
+        var DAILY_CHALLENGE_END_DATE = '2026-09-01';
+
+        function _dailyChallengeToday() { return new Date().toISOString().slice(0, 10); }
+
+        function _dailyChallengeStorageKey(kind) {
+            // Scoped per signed-in user so switching accounts on the same device/browser
+            // can't leak one student's lock/progress into another's.
+            var uid = window._authUser ? window._authUser.id : 'anon';
+            return 'daily_challenge_' + kind + '_' + uid;
+        }
+        function _dailyChallengeReadLock() {
+            try {
+                var v = JSON.parse(localStorage.getItem(_dailyChallengeStorageKey('lock')) || 'null');
+                return (v && v.date === _dailyChallengeToday()) ? v : null; // stale day = ignored
+            } catch (e) { return null; }
+        }
+        function _dailyChallengeWriteLock() {
+            try { localStorage.setItem(_dailyChallengeStorageKey('lock'), JSON.stringify({ date: _dailyChallengeToday(), completed: true })); } catch (e) {}
+        }
+        function _dailyChallengeReadProgress() {
+            try {
+                var v = JSON.parse(localStorage.getItem(_dailyChallengeStorageKey('progress')) || 'null');
+                return (v && v.date === _dailyChallengeToday()) ? v : null; // stale day = ignored
+            } catch (e) { return null; }
+        }
+        function _dailyChallengeWriteProgress() {
+            if (_putme.mode !== 'daily_challenge') return;
+            try {
+                localStorage.setItem(_dailyChallengeStorageKey('progress'), JSON.stringify({
+                    date: _putme.dailyChallengeDate,
+                    subjects: _putme.subjects,
+                    questions: _putme.questions,
+                    answers: _putme.answers,
+                    university: _putme.university,
+                    startTime: _putme.startTime,
+                    totalDuration: _putme.customDuration || 7200,
+                    currentSubject: _putme.currentSubject,
+                    currentIndex: _putme.currentIndex
+                }));
+            } catch (e) {}
+        }
+        function _dailyChallengeClearProgress() {
+            try { localStorage.removeItem(_dailyChallengeStorageKey('progress')); } catch (e) {}
+        }
+
+        // ── Entry point: tapped from the home banner ──────────────────────
+        async function openDailyChallengeGate() {
+            if (!window._authUser) { alert('Please sign in first.'); return; }
+            if (_dailyChallengeToday() > DAILY_CHALLENGE_END_DATE) {
+                alert('The Mega Mock Challenge has ended. Thanks for taking part!');
+                return;
+            }
+            // Resume takes priority over everything — an in-progress attempt exists,
+            // there is nothing to gate.
+            var progress = _dailyChallengeReadProgress();
+            if (progress) { _dailyChallengeResume(progress); return; }
+
+            var lock = _dailyChallengeReadLock();
+            if (lock && lock.completed) { _renderDailyChallengeModal({ completed: true }); return; }
+
+            if (!_postSupabase) { alert('Not connected. Please try again.'); return; }
+            var res = await _postSupabase.from('post_utme_daily_challenge')
+                .select('*').eq('challenge_date', _dailyChallengeToday()).maybeSingle();
+            if (!res || !res.data) { alert("No Mega Mock Challenge is set for today — check the WhatsApp channel or try again shortly."); return; }
+            _renderDailyChallengeModal({ row: res.data });
+        }
+
+        // ── PIN modal — three states: completed / resume(handled earlier) / PIN entry ──
+        function _renderDailyChallengeModal(opts) {
+            var old = document.getElementById('daily-challenge-modal');
+            if (old) old.remove();
+
+            var overlay = document.createElement('div');
+            overlay.id = 'daily-challenge-modal';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100003;display:flex;align-items:center;justify-content:center;padding:1rem;';
+            overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+
+            var box = document.createElement('div');
+            box.style.cssText = 'background:#fff;border-radius:16px;padding:1.8rem 1.4rem;max-width:360px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.25);';
+
+            if (opts.completed) {
+                box.innerHTML =
+                    '<div style="font-size:2.2rem;margin-bottom:0.5rem;">🏆</div>' +
+                    '<h3 style="margin:0 0 0.6rem;color:#1a2742;">You\'re done for today!</h3>' +
+                    '<p style="color:#555;font-size:0.9rem;margin:0 0 1.2rem;">You have completed today\'s challenge. Check the leaderboard and come back tomorrow.</p>' +
+                    '<button onclick="document.getElementById(\'daily-challenge-modal\').remove(); openLeaderboard();" style="width:100%;background:#312e81;color:#fff;border:none;border-radius:10px;padding:0.65rem;font-weight:700;font-size:0.95rem;cursor:pointer;margin-bottom:0.5rem;">View Leaderboard</button>' +
+                    '<button onclick="document.getElementById(\'daily-challenge-modal\').remove();" style="background:none;border:none;color:#888;cursor:pointer;font-size:0.85rem;">Close</button>';
+            } else {
+                var row = opts.row;
+                box.innerHTML =
+                    '<div style="font-size:2.2rem;margin-bottom:0.5rem;">🏆</div>' +
+                    '<h3 style="margin:0 0 0.5rem;color:#1a2742;">Mega Mock Challenge</h3>' +
+                    '<p style="color:#555;font-size:0.88rem;margin:0 0 1rem;">' + row.duration_minutes + ' min · ' + row.questions_per_subject + ' Qs/subject · one attempt today</p>' +
+                    '<input type="text" id="daily-challenge-pin-input" maxlength="20" placeholder="Enter today\'s PIN" style="width:100%;box-sizing:border-box;padding:0.6rem 0.8rem;border:2px solid #ffcc02;border-radius:8px;font-size:1rem;margin-bottom:0.5rem;text-align:center;letter-spacing:2px;text-transform:uppercase;outline:none;">' +
+                    '<div id="daily-challenge-pin-error" style="color:#c62828;font-size:0.82rem;min-height:1.1rem;margin-bottom:0.5rem;"></div>' +
+                    '<button id="daily-challenge-pin-submit" style="width:100%;background:#312e81;color:#fff;border:none;border-radius:10px;padding:0.65rem;font-weight:700;font-size:0.95rem;cursor:pointer;margin-bottom:0.5rem;">Unlock Challenge</button>' +
+                    '<button onclick="document.getElementById(\'daily-challenge-modal\').remove();" style="background:none;border:none;color:#888;cursor:pointer;font-size:0.85rem;">Cancel</button>';
+                overlay.appendChild(box);
+                document.body.appendChild(overlay);
+                document.getElementById('daily-challenge-pin-submit').onclick = function () { _dailyChallengeCheckPin(row); };
+                document.getElementById('daily-challenge-pin-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') _dailyChallengeCheckPin(row); });
+                setTimeout(function () { var i = document.getElementById('daily-challenge-pin-input'); if (i) i.focus(); }, 100);
+                return;
+            }
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+        }
+
+        function _dailyChallengeCheckPin(row) {
+            var input = document.getElementById('daily-challenge-pin-input');
+            var errEl = document.getElementById('daily-challenge-pin-error');
+            var given = (input.value || '').trim().toUpperCase();
+            var real  = (row.pin || '').trim().toUpperCase();
+            if (!given) { errEl.textContent = 'Please enter the PIN.'; return; }
+            if (given !== real) { errEl.textContent = '❌ Wrong PIN. Check the WhatsApp channel and try again.'; return; }
+            var modal = document.getElementById('daily-challenge-modal');
+            if (modal) modal.remove();
+            startDailyChallenge(row);
+        }
+
+        // ── Start a fresh attempt (subjects already required to be saved) ──
+        async function startDailyChallenge(row) {
+            var savedSubjects = window._authProfile && window._authProfile.post_utme_subjects;
+            if (!savedSubjects || savedSubjects.length < 4) {
+                alert('Please select your subjects first — start a Practice or Mock exam once, then come back to the Mega Mock Challenge.');
+                return;
+            }
+            var uni = (window._authProfile && window._authProfile.selected_university) || _selectedUni || 'OAU';
+            _putme.dailyChallengeDate = row.challenge_date;
+            _putme.customDuration      = (row.duration_minutes || 120) * 60;
+            _putme.questionsPerSubject = row.questions_per_subject || 20;
+            await startPutmeExam(savedSubjects, 'daily_challenge', uni);
+        }
+
+        // ── Resume an in-progress attempt after a refresh ──────────────────
+        // Restores _putme directly from the saved snapshot — deliberately does NOT
+        // go through initPutmeExam, which unconditionally wipes answers/startTime.
+        function _dailyChallengeResume(progress) {
+            var subjectMap = {};
+            progress.subjects.forEach(function (s) { subjectMap[s] = []; });
+            (progress.questions || []).forEach(function (q) { if (subjectMap[q.subject]) subjectMap[q.subject].push(q); });
+
+            _putme.questions        = progress.questions || [];
+            _putme.subjectMap       = subjectMap;
+            _putme.subjects         = progress.subjects || [];
+            _putme.answers          = progress.answers || {};
+            _putme.currentSubject   = progress.currentSubject || progress.subjects[0];
+            _putme.currentIndex     = progress.currentIndex || 0;
+            _putme.mode             = 'daily_challenge';
+            _putme.university       = progress.university;
+            _putme.submitted        = false;
+            _putme.startTime        = progress.startTime;
+            _putme.dailyChallengeDate = progress.date;
+            _putme.customDuration   = progress.totalDuration;
+
+            // Time keeps running in the real world while they're away — recomputed
+            // from elapsed wall-clock time, not reset, so a refresh can't buy more time.
+            var elapsedSec = Math.floor((Date.now() - progress.startTime) / 1000);
+            _putme.timeLeft = Math.max(0, (progress.totalDuration || 7200) - elapsedSec);
+
+            document.getElementById('post-utme-home').style.display = 'none';
+            var _ag = document.getElementById('putme-action-grid');
+            if (_ag) _ag.style.display = 'none';
+            document.getElementById('putme-result-wrap').classList.remove('active');
+            document.getElementById('putme-exam-wrap').classList.add('active');
+            var _eb = document.getElementById('exam-back-btn');
+            if (_eb) _eb.style.display = 'none';
+            _setBottomNavVisible(false);
+
+            var profile = window._authProfile, user = window._authUser;
+            var name = (profile && profile.full_name) || (user && user.user_metadata && user.user_metadata.full_name) || 'Student';
+            var candEl = document.getElementById('putme-cbt-candidate');
+            var uniEl  = document.getElementById('putme-cbt-uni');
+            if (candEl) candEl.textContent = name;
+            if (uniEl) uniEl.textContent = _putme.university + ' · 🏆 Mega Mock Challenge';
+
+            if (_putme.timeLeft <= 0) { autoSubmitPutme(); return; }
+
+            var timerEl = document.getElementById('putme-timer-display');
+            var badgeEl = document.getElementById('putme-practice-badge');
+            if (timerEl) timerEl.style.display = 'block';
+            if (badgeEl) badgeEl.style.display = 'none';
+            clearInterval(_putme.timerInterval);
+            _putme.timerInterval = setInterval(function () {
+                _putme.timeLeft--;
+                updatePutmeTimer();
+                _dailyChallengeWriteProgress();
+                if (_putme.timeLeft <= 0) { clearInterval(_putme.timerInterval); autoSubmitPutme(); }
+            }, 1000);
+            updatePutmeTimer();
+
+            buildPutmeTabs();
+            renderPutmeQuestion();
+        }
+
+        // Called once when Post-UTME is entered — resumes silently if a genuine
+        // in-progress attempt exists (this is the only path a refresh can reach,
+        // since the lock-in removes every other way to leave mid-attempt).
+        function _dailyChallengeAutoResumeIfNeeded() {
+            var banner = document.getElementById('daily-challenge-banner');
+            if (banner) banner.style.display = (_dailyChallengeToday() > DAILY_CHALLENGE_END_DATE) ? 'none' : 'flex';
+            var progress = _dailyChallengeReadProgress();
+            if (progress) _dailyChallengeResume(progress);
         }
 
         function initPutmeExam(questions, subjects, mode, university) {
@@ -15092,19 +15309,23 @@
             var candEl = document.getElementById('putme-cbt-candidate');
             var uniEl = document.getElementById('putme-cbt-uni');
             if (candEl) candEl.textContent = name;
-            if (uniEl) uniEl.textContent = university + ' · ' + (mode === 'mock' ? (_putme.mockTitle || window.currentEventTitle || 'Mock Exam') : 'Practice');
+            if (uniEl) uniEl.textContent = university + ' · ' + (mode === 'daily_challenge' ? '🏆 Mega Mock Challenge' : mode === 'mock' ? (_putme.mockTitle || window.currentEventTitle || 'Mock Exam') : 'Practice');
 
             // Timer
             var timerEl = document.getElementById('putme-timer-display');
             var badgeEl = document.getElementById('putme-practice-badge');
-            if (mode === 'mock') {
-                _putme.timeLeft = 7200; // 2 hours
+            if (mode === 'mock' || mode === 'daily_challenge') {
+                // customDuration is set by scheduled-mock-join and the daily challenge;
+                // this used to hardcode 7200 regardless, silently ignoring any
+                // admin-configured duration for both.
+                _putme.timeLeft = _putme.customDuration || 7200;
                 if (timerEl) timerEl.style.display = 'block';
                 if (badgeEl) badgeEl.style.display = 'none';
                 clearInterval(_putme.timerInterval);
                 _putme.timerInterval = setInterval(function () {
                     _putme.timeLeft--;
                     updatePutmeTimer();
+                    _dailyChallengeWriteProgress();
                     if (_putme.timeLeft <= 0) {
                         clearInterval(_putme.timerInterval);
                         autoSubmitPutme();
@@ -15118,6 +15339,9 @@
 
             buildPutmeTabs();
             renderPutmeQuestion();
+            // Initial snapshot so a refresh before the first tick/answer still resumes
+            // correctly instead of losing the freshly-fetched question set entirely.
+            _dailyChallengeWriteProgress();
         }
 
         function updatePutmeTimer() {
@@ -15247,6 +15471,7 @@
         function selectPutmeAnswer(globalIdx, label, optIdx) {
             if (_putme.submitted) return;
             _putme.answers[globalIdx] = label;
+            _dailyChallengeWriteProgress();
             renderPutmeQuestion();
             renderPutmeNavigator();
             // Auto-advance in practice after 1.2s
@@ -15342,6 +15567,8 @@
             });
 
             var timeTaken = Math.floor((Date.now() - _putme.startTime) / 1000);
+            var _isDailyChallenge = _putme.mode === 'daily_challenge';
+            var _dailyChallengeRejected = false;
 
             // Save to Supabase
             if (_postSupabase && window._authUser) {
@@ -15359,8 +15586,35 @@
                     // Use window.currentEventId as durable fallback in case _putme.mockEventId was cleared
                     var _eid = _putme.mockEventId || window.currentEventId || null;
                     if (_eid) examRow.mock_event_id = _eid;
-                    await _postSupabase.from('post_utme_exams').insert(examRow);
+                    if (_isDailyChallenge) examRow.daily_challenge_date = _putme.dailyChallengeDate;
+                    var _insertRes = await _postSupabase.from('post_utme_exams').insert(examRow);
+                    if (_insertRes && _insertRes.error) {
+                        // 23505 = unique_violation — the partial unique index on
+                        // (student_id, daily_challenge_date) is the real one-attempt-per-day
+                        // guarantee; this is what actually fires if someone clears
+                        // localStorage and tries to resubmit a second attempt for today.
+                        if (_isDailyChallenge && _insertRes.error.code === '23505') {
+                            _dailyChallengeRejected = true;
+                            // The DB just confirmed a completed attempt already exists today
+                            // (even though our local record didn't know it, e.g. localStorage
+                            // was cleared) — write the lock now so the next visit shows the
+                            // "already completed" message instead of another wasted attempt.
+                            _dailyChallengeWriteLock();
+                        } else {
+                            console.warn('Result save failed:', _insertRes.error.message);
+                        }
+                    } else if (_isDailyChallenge) {
+                        _dailyChallengeWriteLock();
+                        _dailyChallengeClearProgress();
+                    }
                 } catch(e) { console.warn('Result save failed:', e.message); }
+            }
+
+            if (_dailyChallengeRejected) {
+                _dailyChallengeClearProgress();
+                backToPutmeHome();
+                _renderDailyChallengeModal({ completed: true });
+                return;
             }
 
             // Gamification: update streak + badges
@@ -15830,8 +16084,9 @@
             listEl.innerHTML = '<div class="lb-empty">Loading…</div>';
             if (!_postSupabase) { listEl.innerHTML = '<div class="lb-empty">Not connected.</div>'; return; }
             try {
-                var isWeeklyMock = (mode === 'weekly_mock');
-                var weekBounds   = isWeeklyMock ? _lbWeekBounds() : null;
+                var isWeeklyMock     = (mode === 'weekly_mock');
+                var isDailyChallenge = (mode === 'daily_challenge');
+                var weekBounds       = isWeeklyMock ? _lbWeekBounds() : null;
 
                 // Query 1: exam rows (no FK join — avoids silent failures)
                 var query = _postSupabase.from('post_utme_exams')
@@ -15846,6 +16101,9 @@
                                  .gte('created_at', weekBounds.start)
                                  .lt('created_at', weekBounds.end);
                 }
+                if (isDailyChallenge) {
+                    query = query.eq('daily_challenge_date', _dailyChallengeToday());
+                }
 
                 var res = await new Promise(function(resolve) {
                     var t = setTimeout(function(){ resolve({ data:[] }); }, 8000);
@@ -15856,6 +16114,8 @@
                 if (!res.data || res.data.length === 0) {
                     var emptyMsg = isWeeklyMock
                         ? '📅 No mock submissions this week yet. Check back after the next scheduled mock!'
+                        : isDailyChallenge
+                        ? '🏆 No Mega Mock Challenge attempts yet today — be the first!'
                         : '📭 No results yet!';
                     listEl.innerHTML = '<div class="lb-empty">' + emptyMsg + '</div>';
                     return;
@@ -16126,7 +16386,7 @@
             overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg,#f4f7fb);z-index:99999;overflow-y:auto;';
             var header = document.createElement('div');
             header.style.cssText = 'background:linear-gradient(135deg,#1a2742,#0056b3);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;';
-            header.innerHTML = '<h2 style="margin:0;font-size:1.2rem;">📊 My Exam History</h2>';
+            header.innerHTML = '<h2 style="margin:0;font-size:1.2rem;">📊 Analytics & History</h2>';
             var backBtn = document.createElement('button');
             backBtn.textContent = '\u2190 Back';
             backBtn.style.cssText = 'background:rgba(255,255,255,0.15);border:none;color:#fff;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:0.85rem;';
@@ -16186,7 +16446,11 @@
         function _buildHistoryDashboardHTML(rows) {
             // Average score % across all attempts
             var pcts = rows.map(function(r) { return r.total_questions > 0 ? (r.score / r.total_questions) * 100 : 0; });
-            var avgPct = Math.round(pcts.reduce(function(a, b) { return a + b; }, 0) / pcts.length);
+            var avgPct  = Math.round(pcts.reduce(function(a, b) { return a + b; }, 0) / pcts.length);
+            var bestPct = Math.round(Math.max.apply(null, pcts));
+            // Merged in from the old separate Analytics screen
+            var mockCount     = rows.filter(function(r) { return r.exam_mode === 'mock'; }).length;
+            var practiceCount = rows.length - mockCount;
 
             // Strongest subject \u2014 aggregate per-subject correct/total from every exam's
             // stored raw_data.subject_scores, then take the highest overall percentage.
@@ -16226,10 +16490,17 @@
             }
 
             return '<div style="margin-bottom:20px;">' +
-                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">' +
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px;">' +
                     metricCard('\ud83d\udcca', 'Average Score', avgPct + '%') +
-                    metricCard('\ud83d\udcdd', 'Total Exams Taken', rows.length) +
+                    metricCard('\ud83c\udfc6', 'Best Score', bestPct + '%') +
+                    metricCard('\ud83d\udcdd', 'Total Exams', rows.length) +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">' +
                     metricCard('\ud83d\udcaa', 'Strongest Subject', strongestLabel) +
+                    '<div style="grid-column:span 2;background:#fff;border-radius:14px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">' +
+                        '<span style="background:#e8f4fd;color:#0056b3;border-radius:20px;padding:5px 14px;font-size:0.8rem;font-weight:700;">\ud83c\udfaf ' + practiceCount + ' Practice</span>' +
+                        '<span style="background:#f3e8ff;color:#7c3aed;border-radius:20px;padding:5px 14px;font-size:0.8rem;font-weight:700;">\ud83d\udcc5 ' + mockCount + ' Mock</span>' +
+                    '</div>' +
                 '</div>' +
                 '<div style="background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,0.07);">' +
                     '<div style="font-weight:700;color:#1a2742;margin-bottom:10px;font-size:0.88rem;">\ud83d\udcc8 Score Progression</div>' +
@@ -16365,138 +16636,11 @@
         window.openPutmeExamReview = openPutmeExamReview;
 
 
-        // ── Performance Analytics Hub ─────────────────────────────────────────
-        async function openAnalyticsHub() {
-            if (!_requirePutmeAccess('Analytics')) return;
-            if (!_postSupabase || !window._authUser) { alert('Please sign in to view analytics.'); return; }
-
-            var overlay = document.createElement('div');
-            overlay.id = 'analytics-overlay';
-            overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg,#f4f7fb);z-index:99999;overflow-y:auto;';
-
-            var header = document.createElement('div');
-            header.style.cssText = 'background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;';
-            header.innerHTML = '<h2 style="margin:0;font-size:1.2rem;">📈 Performance Analytics</h2>';
-            var backBtn = document.createElement('button');
-            backBtn.textContent = '← Back';
-            backBtn.style.cssText = 'background:rgba(255,255,255,0.15);border:none;color:#fff;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:0.85rem;';
-            backBtn.onclick = function() { var el = document.getElementById('analytics-overlay'); if (el) el.remove(); };
-            header.appendChild(backBtn);
-
-            var body = document.createElement('div');
-            body.id = 'analytics-body';
-            body.style.cssText = 'max-width:700px;margin:0 auto;padding:20px 16px;';
-            body.innerHTML = '<p style="text-align:center;color:#888;padding:30px;">Loading…</p>';
-
-            overlay.appendChild(header);
-            overlay.appendChild(body);
-            document.body.appendChild(overlay);
-
-            try {
-                var res = await new Promise(function(resolve) {
-                    var t = setTimeout(function(){ resolve({ data:[] }); }, 8000);
-                    _postSupabase.from('post_utme_exams')
-                        .select('score, total_questions, subjects, exam_mode, time_taken, created_at, university')
-                        .eq('student_id', window._authUser.id)
-                        .order('created_at', { ascending: false })
-                        .limit(50)
-                        .then(function(r){ clearTimeout(t); resolve(r); })
-                        .catch(function(){ clearTimeout(t); resolve({ data:[] }); });
-                });
-
-                var rows = (res && res.data) ? res.data : [];
-                if (rows.length === 0) {
-                    body.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#888;">' +
-                        '<div style="font-size:3rem;">📭</div>' +
-                        '<p>No exams yet.<br>Start a Practice or Mock exam to see your analytics!</p></div>';
-                    return;
-                }
-
-                // ── Compute summary stats ──
-                var total       = rows.length;
-                var pcts        = rows.map(function(r){ return r.total_questions > 0 ? (r.score / r.total_questions) * 100 : 0; });
-                var avg         = Math.round(pcts.reduce(function(a, b){ return a + b; }, 0) / pcts.length);
-                var best        = Math.round(Math.max.apply(null, pcts));
-                var mockCount   = rows.filter(function(r){ return r.exam_mode === 'mock'; }).length;
-                var practiceCount = total - mockCount;
-
-                // ── Score trend: last 10 exams in chronological order ──
-                var trend = rows.slice(0, 10).reverse();
-
-                // ── Last 5 exams (newest first) ──
-                var recent5 = rows.slice(0, 5);
-
-                // ── Build HTML ──
-                var html = '';
-
-                // Stats row
-                var statsData = [
-                    { icon: '📝', label: 'Total Exams', val: total },
-                    { icon: '📊', label: 'Avg Score',   val: avg + '%' },
-                    { icon: '🏆', label: 'Best Score',  val: best + '%' }
-                ];
-                html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">';
-                statsData.forEach(function(s) {
-                    html += '<div style="background:#fff;border-radius:14px;padding:16px 10px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.07);">' +
-                        '<div style="font-size:1.5rem;">' + s.icon + '</div>' +
-                        '<div style="font-size:1.5rem;font-weight:900;color:#1a2742;margin:4px 0;">' + s.val + '</div>' +
-                        '<div style="font-size:0.7rem;color:#888;text-transform:uppercase;letter-spacing:0.05em;">' + s.label + '</div>' +
-                        '</div>';
-                });
-                html += '</div>';
-
-                // Mode breakdown
-                html += '<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">' +
-                    '<span style="background:#e8f4fd;color:#0056b3;border-radius:20px;padding:5px 14px;font-size:0.8rem;font-weight:700;">🎯 ' + practiceCount + ' Practice</span>' +
-                    '<span style="background:#f3e8ff;color:#7c3aed;border-radius:20px;padding:5px 14px;font-size:0.8rem;font-weight:700;">📅 ' + mockCount + ' Mock</span>' +
-                    '</div>';
-
-                // Score trend bar chart
-                if (trend.length > 1) {
-                    html += '<div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.07);">' +
-                        '<div style="font-weight:700;color:#1a2742;margin-bottom:12px;font-size:0.88rem;">📈 Score Trend — Last ' + trend.length + ' Exams</div>' +
-                        '<div style="display:flex;align-items:flex-end;gap:5px;height:90px;padding-bottom:4px;">';
-                    trend.forEach(function(r, i) {
-                        var p   = r.total_questions > 0 ? Math.round((r.score / r.total_questions) * 100) : 0;
-                        var bh  = Math.max(8, Math.round((p / 100) * 70));
-                        var col = p >= 70 ? '#28a745' : p >= 50 ? '#0056b3' : '#dc3545';
-                        var isLatest = (i === trend.length - 1);
-                        var dt  = new Date(r.created_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
-                        html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">' +
-                            '<div style="font-size:0.58rem;color:#888;font-weight:700;">' + p + '%</div>' +
-                            '<div title="' + dt + '" style="width:100%;height:' + bh + 'px;background:' + col + ';border-radius:4px 4px 0 0;opacity:' + (isLatest ? '1' : '0.65') + ';transition:opacity 0.2s;"></div>' +
-                            '<div style="font-size:0.55rem;color:#aaa;white-space:nowrap;overflow:hidden;max-width:100%;text-align:center;">' + dt + '</div>' +
-                            '</div>';
-                    });
-                    html += '</div></div>';
-                }
-
-                // Last 5 exams heading
-                html += '<div style="font-weight:700;color:#1a2742;margin-bottom:10px;font-size:0.88rem;">🕒 Last 5 Exams</div>';
-                recent5.forEach(function(r) {
-                    var p    = r.total_questions > 0 ? Math.round((r.score / r.total_questions) * 100) : 0;
-                    var col  = p >= 70 ? '#28a745' : p >= 50 ? '#0056b3' : '#dc3545';
-                    var date = new Date(r.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
-                    var mins = Math.floor((r.time_taken || 0) / 60);
-                    var secs = (r.time_taken || 0) % 60;
-                    var modeLabel = r.exam_mode === 'mock' ? '📅 Mock' : '🎯 Practice';
-                    html += '<div style="background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,0.07);">' +
-                        '<div style="display:flex;align-items:center;gap:12px;">' +
-                        '<div style="font-size:1.8rem;font-weight:900;color:' + col + ';min-width:52px;text-align:center;line-height:1;">' + p + '%</div>' +
-                        '<div style="flex:1;min-width:0;">' +
-                        '<div style="font-weight:700;color:#1a2742;font-size:0.9rem;">' + modeLabel + ' · ' + (r.university || '—') + '</div>' +
-                        '<div style="font-size:0.77rem;color:#555;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (r.subjects || []).join(' · ') + '</div>' +
-                        '<div style="font-size:0.72rem;color:#aaa;margin-top:2px;">' + date + (r.time_taken ? ' · ' + mins + 'm ' + secs + 's' : '') + '</div>' +
-                        '</div>' +
-                        '<div style="font-size:1rem;font-weight:800;color:' + col + ';white-space:nowrap;">' + r.score + '/' + r.total_questions + '</div>' +
-                        '</div></div>';
-                });
-
-                body.innerHTML = html;
-            } catch(e) {
-                body.innerHTML = '<div style="text-align:center;padding:40px;color:#888;">Could not load analytics.</div>';
-            }
-        }
+        // Analytics used to be its own separate screen (openAnalyticsHub) — merged
+        // into "My History" above (see _buildHistoryDashboardHTML), which already
+        // covered most of the same ground (average score, chart, exam list) using
+        // the same post_utme_exams rows. Best Score and the Practice/Mock breakdown
+        // were the only pieces unique to Analytics, folded into the dashboard there.
 
         // ═════════════════════════════════════════════════════════════════════
         // SCHEDULED MOCK EVENTS
@@ -16714,6 +16858,7 @@
         function openAdminPanel() {
             document.getElementById('admin-panel').classList.add('active');
             adminLoadMocks();
+            adminLoadDailyChallenges();
         }
         function showAdminFab() {
             var fab = document.getElementById('admin-fab');
@@ -16779,6 +16924,62 @@
                 document.getElementById('adm-title').value=''; document.getElementById('adm-datetime').value=''; document.getElementById('adm-desc').value='';
                 adminLoadMocks(); loadMockEvents();
             } catch(e) { showAdminMsg('Failed: '+e.message,'#c00'); }
+        }
+
+        async function adminSaveDailyChallenge() {
+            var msgEl = document.getElementById('adm-dc-msg');
+            var dateVal = document.getElementById('adm-dc-date').value || _dailyChallengeToday();
+            var pinVal  = (document.getElementById('adm-dc-pin').value || '').trim().toUpperCase();
+            var durVal  = parseInt(document.getElementById('adm-dc-duration').value || '120', 10) || 120;
+            var qVal    = parseInt(document.getElementById('adm-dc-questions').value || '20', 10) || 20;
+            if (!pinVal) { alert('Please enter a PIN.'); return; }
+            if (!_postSupabase) { msgEl.style.display='block'; msgEl.style.color='#c00'; msgEl.textContent='Database not connected.'; return; }
+            msgEl.style.display = 'block'; msgEl.style.color = '#888'; msgEl.textContent = 'Saving…';
+            try {
+                var res = await _postSupabase.from('post_utme_daily_challenge').upsert({
+                    challenge_date: dateVal, pin: pinVal, duration_minutes: durVal, questions_per_subject: qVal
+                }, { onConflict: 'challenge_date' });
+                if (res.error) throw res.error;
+                msgEl.style.color = '#16a34a';
+                msgEl.textContent = '✅ Saved! PIN "' + pinVal + '" is live for ' + dateVal + '.';
+                adminLoadDailyChallenges();
+            } catch(e) {
+                msgEl.style.color = '#dc3545';
+                msgEl.textContent = '❌ Error: ' + (e.message || e);
+            }
+        }
+
+        async function adminLoadDailyChallenges() {
+            var listEl = document.getElementById('adm-dc-list');
+            if (!listEl || !_postSupabase) return;
+            listEl.innerHTML = '<p style="color:#888;text-align:center;">Loading…</p>';
+            try {
+                var res = await _postSupabase.from('post_utme_daily_challenge')
+                    .select('challenge_date, pin, duration_minutes, questions_per_subject')
+                    .order('challenge_date', { ascending: false })
+                    .limit(10);
+                var rows = (res && res.data) ? res.data : [];
+                if (!rows.length) { listEl.innerHTML = '<p style="color:#888;text-align:center;">No daily challenges set yet.</p>'; return; }
+                var today = _dailyChallengeToday();
+                // Prefill the date field with today if empty
+                var dateEl = document.getElementById('adm-dc-date');
+                if (dateEl && !dateEl.value) dateEl.value = today;
+                var todayRow = rows.find(function(r){ return r.challenge_date === today; });
+                if (todayRow) {
+                    var pinEl = document.getElementById('adm-dc-pin');
+                    if (pinEl && !pinEl.value) pinEl.value = todayRow.pin;
+                }
+                listEl.innerHTML = rows.map(function(r) {
+                    var isToday = r.challenge_date === today;
+                    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8fafd;border:1px solid #e0e7ef;border-radius:8px;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
+                        '<span style="font-size:0.82rem;color:#555;">' + r.challenge_date + (isToday ? ' <strong style="color:#16a34a;">(TODAY)</strong>' : '') +
+                        ' · ' + r.duration_minutes + 'min · ' + r.questions_per_subject + ' Qs/subject</span>' +
+                        '<strong style="color:#312e81;letter-spacing:1px;">' + r.pin + '</strong>' +
+                        '</div>';
+                }).join('');
+            } catch(e) {
+                listEl.innerHTML = '<p style="color:#dc3545;text-align:center;">Failed to load: ' + e.message + '</p>';
+            }
         }
 
         function showAdminMsg(msg, color) {
@@ -17368,8 +17569,8 @@
             var sm = document.getElementById('subject-modal');
             if (sm) sm.classList.remove('open');
             _pendingExamMode = null;
-            // Remove any dynamically-created full-screen overlays (History, Analytics, Duel)
-            ['my-hist-overlay', 'analytics-overlay', 'duel-overlay', 'profile-overlay', 'putme-review-overlay'].forEach(function(id) {
+            // Remove any dynamically-created full-screen overlays (History+Analytics, Duel)
+            ['my-hist-overlay', 'duel-overlay', 'profile-overlay', 'putme-review-overlay'].forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) el.remove();
             });

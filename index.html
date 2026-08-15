@@ -384,6 +384,16 @@
                     <!-- ── Action Grid (shown after uni saved) ── -->
                     <div id="putme-action-grid" style="display:none;">
 
+                        <!-- Daily PIN-gated Mega Mock Challenge (runs until Sept 1) -->
+                        <div id="daily-challenge-banner" onclick="openDailyChallengeGate()"
+                            style="cursor:pointer;background:linear-gradient(135deg,#312e81,#c0392b);color:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 4px 16px rgba(49,46,129,0.3);">
+                            <div>
+                                <div style="font-weight:800;font-size:0.95rem;">🏆 Mega Mock Challenge</div>
+                                <div style="font-size:0.78rem;opacity:0.85;margin-top:2px;">Today's PIN · One attempt · Win daily prizes</div>
+                            </div>
+                            <div style="background:rgba(255,255,255,0.2);border-radius:20px;padding:6px 14px;font-size:0.8rem;font-weight:700;white-space:nowrap;">Enter PIN →</div>
+                        </div>
+
                         <!-- Gamification chips -->
                         <div class="putme-gami-chips" id="gami-bar" style="display:none;">
                             <div class="putme-gami-chip"><span class="streak-fire">🔥</span> <span id="streak-num">0</span> day streak</div>
@@ -432,15 +442,10 @@
                                 <div class="pic-label">Leaderboard</div>
                                 <div class="pic-sub">See your rank</div>
                             </div>
-                            <div class="putme-icon-card pic-purple" onclick="openAnalyticsHub()">
-                                <div class="pic-icon">📈</div>
-                                <div class="pic-label">Analytics</div>
-                                <div class="pic-sub">Score trends 🔐</div>
-                            </div>
-                            <div class="putme-icon-card" onclick="openMyHistory()">
+                            <div class="putme-icon-card pic-purple" onclick="openMyHistory()">
                                 <div class="pic-icon">📊</div>
-                                <div class="pic-label">My History</div>
-                                <div class="pic-sub">Past attempts 🔐</div>
+                                <div class="pic-label">Analytics & History</div>
+                                <div class="pic-sub">Trends · past attempts 🔐</div>
                             </div>
                         </div>
 
@@ -648,6 +653,7 @@
                         <button class="lb-tab active" onclick="loadLeaderboard('all',this)">🎯 General Practice</button>
                         <button class="lb-tab" onclick="loadLeaderboard('uni',this)">🏫 My University</button>
                         <button class="lb-tab" onclick="loadLeaderboard('weekly_mock',this)">📅 Weekly Mocks</button>
+                        <button class="lb-tab" onclick="loadLeaderboard('daily_challenge',this)">🏆 Today's Challenge</button>
                     </div>
                     <div id="lb-list">
                         <div class="lb-empty">Loading leaderboard…</div>
@@ -806,6 +812,42 @@
                         <div class="admin-section">
                             <h3>📋 All Scheduled Mocks</h3>
                             <div id="adm-mocks-list">
+                                <p style="color:#888;text-align:center;">Loading…</p>
+                            </div>
+                        </div>
+
+                        <div class="admin-section">
+                            <h3>🏆 Mega Mock Challenge — Daily PIN</h3>
+                            <p style="color:#555;font-size:0.85rem;margin-bottom:12px;">One PIN + format per day, runs until <strong>Sept 1</strong>. Students get exactly one attempt/day, enforced by the database.</p>
+                            <div class="admin-form-grid">
+                                <div class="admin-field">
+                                    <label>Date</label>
+                                    <input type="date" id="adm-dc-date">
+                                </div>
+                                <div class="admin-field">
+                                    <label>Today's PIN</label>
+                                    <input type="text" id="adm-dc-pin" placeholder="e.g. MEGA-2608" style="text-transform:uppercase;">
+                                </div>
+                                <div class="admin-field">
+                                    <label>Duration (minutes)</label>
+                                    <input type="number" id="adm-dc-duration" value="120" min="10" max="180">
+                                </div>
+                                <div class="admin-field">
+                                    <label>Questions per Subject</label>
+                                    <select id="adm-dc-questions">
+                                        <option value="10">10 questions</option>
+                                        <option value="20" selected>20 questions</option>
+                                        <option value="30">30 questions</option>
+                                        <option value="40">40 questions</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button class="admin-create-btn" style="background:#312e81;" onclick="adminSaveDailyChallenge()">🏆 Save Today's Challenge</button>
+                            <div id="adm-dc-msg" style="text-align:center;margin-top:10px;font-size:0.88rem;display:none;"></div>
+                        </div>
+                        <div class="admin-section">
+                            <h3>📋 Recent Daily Challenges</h3>
+                            <div id="adm-dc-list">
                                 <p style="color:#888;text-align:center;">Loading…</p>
                             </div>
                         </div>

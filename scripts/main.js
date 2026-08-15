@@ -14264,7 +14264,7 @@
 
         function openClassroomPortal() {
             if (!_requirePutmeAccess('Classroom')) return;
-            window.open('https://insideoaututorial.up.railway.app', '_blank');
+            window.open('https://insideoaututorial-production.up.railway.app/', '_blank');
         }
 
         // ── Activation Code Redemption ────────────────────────────────────

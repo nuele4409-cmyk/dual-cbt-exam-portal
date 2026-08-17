@@ -14843,6 +14843,11 @@
         function closeSubjectModal() {
             document.getElementById('subject-modal').classList.remove('open');
             _pendingExamMode = null;
+            // Without this, backing out of "Change Subjects" (rather than saving it)
+            // leaves this flag stuck true for the rest of the session — every later
+            // subject pick (Mock/Practice/Mega Mock) would then silently short-circuit
+            // in confirmSubjectsAndStart()'s change-mode branch instead of starting.
+            _subjectChangeMode = false;
         }
 
         function toggleSubject(id) {
@@ -15075,7 +15080,23 @@
             // startDailyChallenge() — so it needs no exemption here.)
             if (!window._putmeHasAccess) {
                 _putme.isPreview = true;
-                allQuestions = allQuestions.slice(0, 10);
+                // allQuestions is built subject-by-subject, so a flat slice(0, 10)
+                // landed entirely inside whichever subject came first (always the
+                // locked one — Aptitude Test for OAU/UNILAG/UNILORIN/UI) and FREE
+                // students never saw a single question from their other 3 subjects.
+                // Cap per-subject instead so the preview samples every subject.
+                var _perSubjectCap = Math.max(1, Math.ceil(10 / subjects.length));
+                var _previewQuestions = [];
+                var _countBySubject = {};
+                for (var _pi = 0; _pi < allQuestions.length && _previewQuestions.length < 10; _pi++) {
+                    var _pq = allQuestions[_pi];
+                    _countBySubject[_pq.subject] = _countBySubject[_pq.subject] || 0;
+                    if (_countBySubject[_pq.subject] < _perSubjectCap) {
+                        _previewQuestions.push(_pq);
+                        _countBySubject[_pq.subject]++;
+                    }
+                }
+                allQuestions = _previewQuestions;
             } else {
                 _putme.isPreview = false;
             }
@@ -17733,6 +17754,7 @@
             var sm = document.getElementById('subject-modal');
             if (sm) sm.classList.remove('open');
             _pendingExamMode = null;
+            _subjectChangeMode = false;
             // Remove any dynamically-created full-screen overlays (History+Analytics, Duel)
             ['my-hist-overlay', 'duel-overlay', 'profile-overlay', 'putme-review-overlay'].forEach(function(id) {
                 var el = document.getElementById(id);
